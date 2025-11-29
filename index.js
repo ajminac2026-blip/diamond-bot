@@ -14,18 +14,28 @@ const { handleDepositRequest, handleDepositApproval, handleBalanceQuery, showPen
 // Connect to Admin Panel Socket.IO server
 const adminSocket = io('http://localhost:3000', {
     reconnection: true,
-    reconnectionDelay: 1000,
-    reconnectionDelayMax: 5000,
-    reconnectionAttempts: 99999,
-    transports: ['websocket', 'polling']
+    reconnectionDelay: 2000,
+    reconnectionDelayMax: 10000,
+    reconnectionAttempts: Infinity,
+    transports: ['websocket', 'polling'],
+    forceNew: false,
+    multiplex: true
 });
 
 adminSocket.on('connect', () => {
     console.log('✅ Connected to Admin Panel');
 });
 
-adminSocket.on('disconnect', () => {
-    console.log('❌ Disconnected from Admin Panel');
+adminSocket.on('disconnect', (reason) => {
+    console.log(`❌ Disconnected from Admin Panel - Reason: ${reason}`);
+});
+
+adminSocket.on('connect_error', (error) => {
+    console.log(`⚠️ Connection error: ${error.message}`);
+});
+
+adminSocket.on('error', (error) => {
+    console.log(`⚠️ Socket error: ${error}`);
 });
 
 // Initialize database files

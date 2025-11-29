@@ -21,6 +21,8 @@ adminProcess.on('error', (err) => {
 // Wait for admin panel to start before starting bot
 setTimeout(() => {
   console.log('\n📱 Starting WhatsApp Bot...');
+  console.log('⏳ Waiting for admin panel to be ready...\n');
+  
   botProcess = spawn('node', ['index.js'], {
     cwd: __dirname,
     stdio: 'inherit'
@@ -34,7 +36,7 @@ setTimeout(() => {
   botProcess.on('exit', (code) => {
     console.log(`❌ Bot process exited with code ${code}`);
   });
-}, 3000);
+}, 5000);
 
 adminProcess.on('exit', (code) => {
   console.log(`❌ Admin panel exited with code ${code}`);
