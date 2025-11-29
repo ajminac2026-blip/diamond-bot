@@ -1,1 +1,1 @@
-run = "node start-all.js"
+run = "bash setup-puppeteer-deps.sh && node start-all.js"
