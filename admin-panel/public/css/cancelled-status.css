@@ -1,0 +1,6 @@
+/* Cancelled Status Style */
+.status-cancelled {
+    background: #e2e3e5 !important;
+    color: #383d41 !important;
+    text-decoration: line-through;
+}

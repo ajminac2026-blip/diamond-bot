@@ -807,9 +807,52 @@ client.on('message_revoke', async (after, before) => {
         }
         
         if (deletedEntry) {
+            // Mark as cancelled instead of deleting completely
+            deletedEntry.status = 'cancelled';
+            deletedEntry.cancelledAt = new Date().toISOString();
+            deletedEntry.cancelReason = 'user-deleted-message';
+            
             // আপডেটেড ডাটাবেস সেভ করো
             db.saveDatabase(database);
-            console.log(`[DELETE EVENT] Database saved`);
+            console.log(`[DELETE EVENT] ✅ Marked order as cancelled: ${deletedEntry.diamonds}💎 from ${deletedEntry.userId}`);
+            
+            // Also update in payment-transactions.json (mark as cancelled instead of deleting)
+            try {
+                const fs = require('fs');
+                const path = require('path');
+                const txPath = path.join(__dirname, 'config/payment-transactions.json');
+                
+                let transactions = [];
+                if (fs.existsSync(txPath)) {
+                    const content = fs.readFileSync(txPath, 'utf-8').trim();
+                    if (content) {
+                        transactions = JSON.parse(content);
+                    }
+                }
+                
+                // Find and mark matching transaction as cancelled
+                const updated = transactions.map(tx => {
+                    const txPhone = tx.phone || '';
+                    const isMatch = txPhone === deletedEntry.userId && 
+                                   tx.diamonds === deletedEntry.diamonds && 
+                                   tx.status === 'pending';
+                    
+                    if (isMatch) {
+                        console.log(`[DELETE EVENT] ✅ Marked in payment-transactions.json as cancelled`);
+                        return {
+                            ...tx,
+                            status: 'cancelled',
+                            cancelledAt: new Date().toISOString(),
+                            cancelReason: 'user-deleted-message'
+                        };
+                    }
+                    return tx;
+                });
+                
+                fs.writeFileSync(txPath, JSON.stringify(updated, null, 2), 'utf-8');
+            } catch (txError) {
+                console.log('[DELETE EVENT] Could not update payment-transactions.json:', txError.message);
+            }
             
             // Admin panel কে নোটিফিকেশন পাঠাও
             try {
@@ -817,11 +860,11 @@ client.on('message_revoke', async (after, before) => {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        type: 'order-deleted',
+                        type: 'order-cancelled',
                         reason: 'user-delete',
                         groupId: fromUserId,
                         entry: deletedEntry,
-                        message: `🗑️ অর্ডার ${deletedEntry.diamonds}💎 ইউজার ডিলিট করেছে`
+                        message: `🗑️ অর্ডার ${deletedEntry.diamonds}💎 ইউজার ডিলিট করেছে - স্ট্যাটাস ক্যান্সেল করা হয়েছে`
                     })
                 }).catch(e => console.log('[DELETE EVENT] Admin panel notification failed (offline)'));
             } catch (notifyError) {
@@ -857,9 +900,51 @@ async function startDeletedMessageChecker(client) {
                             const message = await client.getMessageById(entry.messageId);
                             
                             if (!message || !message.id) {
-                                // মেসেজ আর নেই - ডিলিট হয়েছে
+                                // মেসেজ আর নেই - ডিলিট হয়েছে, ক্যান্সেল হিসেবে মার্ক করো
                                 console.log(`[AUTO-CHECK] ✅ Detected deleted message: ${entry.diamonds}💎 from ${entry.userId}`);
-                                const deletedEntry = groupData.entries.splice(i, 1)[0];
+                                const deletedEntry = entry;
+                                
+                                // Mark as cancelled in database
+                                entry.status = 'cancelled';
+                                entry.cancelledAt = new Date().toISOString();
+                                entry.cancelReason = 'user-deleted-message';
+                                
+                                // Also mark as cancelled in payment-transactions.json
+                                try {
+                                    const fs = require('fs');
+                                    const path = require('path');
+                                    const txPath = path.join(__dirname, 'config/payment-transactions.json');
+                                    
+                                    let transactions = [];
+                                    if (fs.existsSync(txPath)) {
+                                        const content = fs.readFileSync(txPath, 'utf-8').trim();
+                                        if (content) {
+                                            transactions = JSON.parse(content);
+                                        }
+                                    }
+                                    
+                                    const updated = transactions.map(tx => {
+                                        const txPhone = tx.phone || '';
+                                        const isMatch = txPhone === deletedEntry.userId && 
+                                                       tx.diamonds === deletedEntry.diamonds && 
+                                                       tx.status === 'pending';
+                                        
+                                        if (isMatch) {
+                                            console.log(`[AUTO-CHECK] ✅ Marked as cancelled in payment-transactions.json`);
+                                            return {
+                                                ...tx,
+                                                status: 'cancelled',
+                                                cancelledAt: new Date().toISOString(),
+                                                cancelReason: 'user-deleted-message'
+                                            };
+                                        }
+                                        return tx;
+                                    });
+                                    
+                                    fs.writeFileSync(txPath, JSON.stringify(updated, null, 2), 'utf-8');
+                                } catch (txErr) {
+                                    console.log('[AUTO-CHECK] Could not update payment-transactions.json:', txErr.message);
+                                }
                                 
                                 // Notify admin
                                 try {
@@ -867,11 +952,11 @@ async function startDeletedMessageChecker(client) {
                                         method: 'POST',
                                         headers: { 'Content-Type': 'application/json' },
                                         body: JSON.stringify({
-                                            type: 'order-deleted',
+                                            type: 'order-cancelled',
                                             reason: 'message-deleted',
                                             groupId: groupId,
                                             entry: deletedEntry,
-                                            message: `🗑️ অর্ডার ${deletedEntry.diamonds}💎 ডিলিট হয়েছে`
+                                            message: `🗑️ অর্ডার ${deletedEntry.diamonds}💎 ক্যান্সেল হয়েছে`
                                         })
                                     }).catch(e => {});
                                 } catch (e) {}
