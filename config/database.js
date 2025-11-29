@@ -421,9 +421,9 @@ function cleanPaymentTransactions() {
         // Filter to keep only valid transactions (with proper type field)
         const validTransactions = transactions.filter(t => 
             t && 
-            t.userId && 
-            t.status === 'approved' && 
-            (t.type === 'auto' || t.type === 'manual' || t.type === 'auto-deduction' || t.type === 'payment')
+            (t.userId || t.phone) &&
+            (t.status === 'approved' || t.status === 'completed' || t.status === 'pending') &&
+            (t.type === 'auto' || t.type === 'manual' || t.type === 'auto-deduction' || t.type === 'payment' || t.type === 'deposit')
         );
         
         const invalidCount = transactions.length - validTransactions.length;

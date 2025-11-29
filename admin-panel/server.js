@@ -732,7 +732,10 @@ app.get('/api/transactions', requireAuth, async (req, res) => {
         const transactions = await readJSON(transactionsPath);
         const database = await readJSON(databasePath);
         
-        const transactionsArray = Object.entries(transactions).map(([id, data]) => {
+        // Handle both array and object formats
+        const transactionsData = Array.isArray(transactions) ? transactions : Object.entries(transactions).map(([id, data]) => ({ id, ...data }));
+        
+        const transactionsArray = transactionsData.map((data) => {
             // Get group name from database if groupId exists
             let groupName = 'Unknown Group';
             if (data.groupId && database.groups && database.groups[data.groupId]) {
@@ -742,9 +745,11 @@ app.get('/api/transactions', requireAuth, async (req, res) => {
             }
 
             return {
-                id,
+                id: data.id || 'unknown',
                 phone: data.phone || 'Unknown',
                 amount: data.amount || 0,
+                diamonds: data.diamonds || 0,
+                rate: data.rate || 100,
                 type: data.type || 'deposit',
                 status: data.status || 'completed',
                 date: data.date || new Date().toISOString(),

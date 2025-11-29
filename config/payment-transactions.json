@@ -28,20 +28,6 @@
     "groupId": "120363405821339800@g.us"
   },
   {
-    "id": "txn_1764438540496_37wf3k2nl",
-    "phone": "115930327715989@lid",
-    "groupName": "Bot making",
-    "amount": 23000,
-    "diamonds": 10000,
-    "type": "manual",
-    "status": "pending",
-    "method": "whatsapp_request",
-    "date": "2025-11-29T17:49:00.496Z",
-    "description": "Diamond request from 115930327715989@lid",
-    "userName": "115930327715989@lid",
-    "groupId": "120363405821339800@g.us"
-  },
-  {
     "id": "txn_1732950000001_user1",
     "phone": "8801760649796",
     "groupName": "Bot making",
@@ -81,6 +67,20 @@
     "date": "2025-11-30T07:00:00.000Z",
     "description": "Diamond request from 8801760649796",
     "userName": "8801760649796",
+    "groupId": "120363405821339800@g.us"
+  },
+  {
+    "id": "txn_1764439636031_ix11dix61",
+    "phone": "115930327715989@lid",
+    "groupName": "Bot making",
+    "amount": 23000,
+    "diamonds": 10000,
+    "type": "manual",
+    "status": "pending",
+    "method": "whatsapp_request",
+    "date": "2025-11-29T18:07:16.031Z",
+    "description": "Diamond request from 115930327715989@lid",
+    "userName": "115930327715989@lid",
     "groupId": "120363405821339800@g.us"
   }
 ]
