@@ -1,0 +1,99 @@
+{
+  "groups": {
+    "120363405821339800@g.us": {
+      "groupId": "120363405821339800@g.us",
+      "entries": [
+        {
+          "id": 1764266472993,
+          "userId": "115930327715989@lid",
+          "userName": "115930327715989@lid",
+          "diamonds": 500,
+          "rate": 2.11,
+          "status": "approved",
+          "createdAt": "2025-11-27T18:01:12.993Z",
+          "messageId": "false_120363405821339800@g.us_AC7D8E1BADB2376703DDD4DCC7396CB3_115930327715989@lid",
+          "approvedAt": "2025-11-27T18:02:19.339Z"
+        },
+        {
+          "id": 1764266473430,
+          "userId": "115930327715989@lid",
+          "userName": "115930327715989@lid",
+          "diamonds": 500,
+          "rate": 2.11,
+          "status": "approved",
+          "createdAt": "2025-11-27T18:01:13.430Z",
+          "messageId": "false_120363405821339800@g.us_ACEF9A32F81F812CBB367AC0F9C88292_115930327715989@lid",
+          "approvedAt": "2025-11-27T18:02:32.838Z"
+        },
+        {
+          "id": 1764266473804,
+          "userId": "115930327715989@lid",
+          "userName": "115930327715989@lid",
+          "diamonds": 5000,
+          "rate": 2.11,
+          "status": "approved",
+          "createdAt": "2025-11-27T18:01:13.804Z",
+          "messageId": "false_120363405821339800@g.us_ACC3A0C8C141848F81C05E6096F61738_115930327715989@lid",
+          "approvedAt": "2025-11-27T18:02:40.952Z"
+        },
+        {
+          "id": 1764266474207,
+          "userId": "115930327715989@lid",
+          "userName": "115930327715989@lid",
+          "diamonds": 3400,
+          "rate": 2.11,
+          "status": "approved",
+          "createdAt": "2025-11-27T18:01:14.207Z",
+          "messageId": "false_120363405821339800@g.us_AC513D21A0EA591720E639328149AD2B_115930327715989@lid",
+          "approvedAt": "2025-11-27T18:02:48.671Z"
+        },
+        {
+          "id": 1764266474637,
+          "userId": "115930327715989@lid",
+          "userName": "115930327715989@lid",
+          "diamonds": 2000,
+          "rate": 2.11,
+          "status": "approved",
+          "createdAt": "2025-11-27T18:01:14.637Z",
+          "messageId": "false_120363405821339800@g.us_AC6EFA4A5B15654C5DBCAE59C9931B33_115930327715989@lid",
+          "approvedAt": "2025-11-27T18:03:01.328Z"
+        },
+        {
+          "id": 1764266475014,
+          "userId": "115930327715989@lid",
+          "userName": "115930327715989@lid",
+          "diamonds": 700,
+          "rate": 2.11,
+          "status": "approved",
+          "createdAt": "2025-11-27T18:01:15.014Z",
+          "messageId": "false_120363405821339800@g.us_AC66AABC2327A218F08626D2AF1E4C4C_115930327715989@lid",
+          "approvedAt": "2025-11-27T18:03:07.792Z"
+        },
+        {
+          "id": 1764266475420,
+          "userId": "115930327715989@lid",
+          "userName": "115930327715989@lid",
+          "diamonds": 1000,
+          "rate": 2.11,
+          "status": "approved",
+          "createdAt": "2025-11-27T18:01:15.420Z",
+          "messageId": "false_120363405821339800@g.us_AC080686E5E533E1C10087DFC8FC1D6E_115930327715989@lid",
+          "approvedAt": "2025-11-27T18:03:14.716Z"
+        },
+        {
+          "id": 1764266476048,
+          "userId": "115930327715989@lid",
+          "userName": "115930327715989@lid",
+          "diamonds": 1000,
+          "rate": 2.11,
+          "status": "approved",
+          "createdAt": "2025-11-27T18:01:16.048Z",
+          "messageId": "false_120363405821339800@g.us_AC27E8FFED2645435F4F075A60863964_115930327715989@lid",
+          "approvedAt": "2025-11-27T18:03:23.357Z"
+        }
+      ],
+      "rate": 2.11,
+      "groupName": "Bot making"
+    }
+  }
+}

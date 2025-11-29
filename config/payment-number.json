@@ -1,0 +1,32 @@
+{
+  "paymentNumbers": [
+    {
+      "method": "Bkash",
+      "number": "01721016186",
+      "type": "Personal",
+      "isBank": false
+    },
+    {
+      "method": "Nagad",
+      "number": "01721016186",
+      "type": "Agent",
+      "isBank": false
+    },
+    {
+      "method": "Rocket",
+      "number": "01721016186",
+      "type": "Personal",
+      "isBank": false
+    },
+    {
+      "method": "islami bank",
+      "number": "324623894746",
+      "type": "Savings",
+      "accountName": "md rubel mia",
+      "branch": "mymensingh",
+      "accountNumber": "324623894746",
+      "isBank": true
+    }
+  ],
+  "message": "💰 *Payment Information*\n\n📱 আমাদের পেমেন্ট নম্বর:\n\n{numbers}\n\n✅ পেমেন্ট করার পর স্ক্রিনশট পাঠান।"
+}
