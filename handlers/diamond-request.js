@@ -2,6 +2,42 @@ const db = require('../config/database');
 const fs = require('fs');
 const path = require('path');
 
+// Save diamond request to payment-transactions.json for admin panel
+function saveDiamondRequestToTransactions(userId, userName, groupId, groupName, diamonds, amount, status = 'pending') {
+    try {
+        const transPath = path.join(__dirname, '../config/payment-transactions.json');
+        let transactions = [];
+        
+        if (fs.existsSync(transPath)) {
+            transactions = JSON.parse(fs.readFileSync(transPath, 'utf8'));
+        }
+        
+        const transaction = {
+            id: `txn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            phone: userId,
+            groupName: groupName,
+            amount: amount,
+            diamonds: diamonds,
+            type: 'manual',
+            status: status,
+            method: 'whatsapp_request',
+            date: new Date().toISOString(),
+            description: `Diamond request from ${userName}`,
+            userName: userName,
+            groupId: groupId
+        };
+        
+        transactions.push(transaction);
+        fs.writeFileSync(transPath, JSON.stringify(transactions, null, 2), 'utf8');
+        
+        console.log(`[TRANSACTION] Saved diamond request: ${transaction.id}`);
+        return transaction;
+    } catch (error) {
+        console.error('[TRANSACTION] Error saving to payment-transactions.json:', error);
+        return null;
+    }
+}
+
 function waFormatCurrency(amount) {
     return `৳${parseFloat(amount).toFixed(2)}`;
 }
@@ -257,6 +293,9 @@ async function handleMultiLineDiamondRequest(msg, userId, userName, groupId, ful
         // ALSO save to database so it can be found by approval handler
         const entry = db.addEntry(groupId, userId, diamonds, rate, groupName, msg.id._serialized, userName);
         
+        // 🔥 Save to admin panel transactions
+        saveDiamondRequestToTransactions(userId, userName, groupId, groupName, diamonds, diamonds * rate, 'pending');
+        
         console.log(`[PENDING DIAMOND] Entry saved to DB:`, {
             id: entry.id,
             userId: entry.userId,
@@ -361,6 +400,9 @@ async function handleDiamondRequest(msg, userId, userName, groupId, diamonds, gr
         // Add entry to database
         const entry = db.addEntry(groupId, userId, diamonds, rate, groupName, msg.id._serialized, userDisplayName);
         const totalValue = diamonds * rate;
+
+        // 🔥 Save to admin panel transactions
+        saveDiamondRequestToTransactions(userId, userDisplayName, groupId, groupName, diamonds, totalValue, 'pending');
 
         // Send confirmation to user
         const confirmationMsg = `✅ *Diamond Order Received*\n\n` +
