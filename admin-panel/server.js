@@ -1966,10 +1966,19 @@ io.on('connection', (socket) => {
 });
 
 // Start server
-server.listen(PORT, '0.0.0.0', () => {
+const HOST = process.env.HOST || '0.0.0.0';
+server.listen(PORT, HOST, () => {
+    const env = process.env.NODE_ENV || 'development';
     console.log(`\n🎉 Admin Panel Started Successfully!`);
+    console.log(`📝 Environment: ${env}`);
+    console.log(`🔌 Port: ${PORT}`);
     console.log(`\n📱 Access from this device: http://localhost:${PORT}`);
     console.log(`📱 Access from other devices: http://YOUR_IP:${PORT}`);
     console.log(`\n💡 To find your IP address, run: ipconfig (Windows) or ifconfig (Mac/Linux)`);
     console.log(`\nExample: http://192.168.1.100:${PORT}\n`);
+    
+    // For Replit debugging
+    if (process.env.REPL_ID) {
+        console.log(`🔗 Replit Project: https://replit.com/@${process.env.REPL_OWNER}/${process.env.REPL_SLUG}`);
+    }
 });

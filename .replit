@@ -1,1 +1,7 @@
-run = "bash setup-puppeteer-deps.sh && node start-all.js"
+run = "node start-all.js"
+modules = ["nodejs-20"]
+
+[env]
+NODE_ENV = "development"
+ADMIN_PORT = "3000"
+BOT_API_PORT = "3001"
