@@ -1087,18 +1087,19 @@ async function loadDiamondRequests() {
         const tbody = document.getElementById('diamondRequestsTable');
         
         if (diamondRequests.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" class="loading">No diamond requests found</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" class="loading">No diamond requests found</td></tr>';
             return;
         }
 
         tbody.innerHTML = diamondRequests.slice(0, 100).map(t => `
             <tr>
+                <td><code>${t.id?.substring(0, 8) || 'N/A'}...</code></td>
                 <td><strong>${t.groupName || t.phone || 'Unknown'}</strong></td>
-                <td>৳${t.amount.toLocaleString()}</td>
-                <td>💎 ${Math.round(t.amount / 100)}</td>
+                <td><strong>💎 ${Math.round(t.amount / 100)}</strong></td>
+                <td><strong>৳${t.amount.toLocaleString()}</strong></td>
                 <td><span class="status-badge status-${t.status}">${t.status}</span></td>
-                <td>${new Date(t.date).toLocaleString('bn-BD')}</td>
                 <td>${t.method || 'manual'}</td>
+                <td>${new Date(t.date).toLocaleString('bn-BD')}</td>
             </tr>
         `).join('');
     } catch (error) {
