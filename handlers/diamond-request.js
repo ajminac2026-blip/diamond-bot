@@ -38,6 +38,74 @@ function saveDiamondRequestToTransactions(userId, userName, groupId, groupName, 
     }
 }
 
+// Migrate old approved orders from database.json to payment-transactions.json
+function migrateOldOrdersToTransactions() {
+    try {
+        const dbPath = path.join(__dirname, '../config/database.json');
+        const transPath = path.join(__dirname, '../config/payment-transactions.json');
+        
+        if (!fs.existsSync(dbPath)) return;
+        
+        const dbData = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
+        let transactions = [];
+        
+        if (fs.existsSync(transPath)) {
+            transactions = JSON.parse(fs.readFileSync(transPath, 'utf8'));
+        }
+        
+        let migratedCount = 0;
+        
+        // Iterate through all groups
+        for (const groupId in dbData.groups) {
+            const group = dbData.groups[groupId];
+            const groupName = group.groupName || 'Unknown Group';
+            
+            // Iterate through all entries
+            for (const entry of group.entries || []) {
+                if (entry.status === 'approved') {
+                    // Check if already migrated
+                    const alreadyExists = transactions.some(t => 
+                        t.phone === entry.userId && 
+                        t.groupName === groupName && 
+                        t.diamonds === entry.diamonds && 
+                        new Date(t.date).getTime() === new Date(entry.approvedAt).getTime()
+                    );
+                    
+                    if (!alreadyExists) {
+                        const transaction = {
+                            id: `txn_${entry.id}_legacy`,
+                            phone: entry.userId,
+                            groupName: groupName,
+                            amount: entry.diamonds * entry.rate,
+                            diamonds: entry.diamonds,
+                            type: 'manual',
+                            status: 'completed',
+                            method: 'whatsapp_request',
+                            date: entry.approvedAt || entry.createdAt,
+                            description: `Migrated approved order from database`,
+                            userName: entry.userName,
+                            groupId: groupId
+                        };
+                        
+                        transactions.push(transaction);
+                        migratedCount++;
+                        console.log(`[MIGRATION] ✅ Migrated order: ${transaction.id}`);
+                    }
+                }
+            }
+        }
+        
+        if (migratedCount > 0) {
+            fs.writeFileSync(transPath, JSON.stringify(transactions, null, 2), 'utf8');
+            console.log(`[MIGRATION] ✅ Successfully migrated ${migratedCount} approved orders to transactions`);
+        } else {
+            console.log(`[MIGRATION] ℹ️ No new orders to migrate`);
+        }
+    } catch (error) {
+        console.error('[MIGRATION] Error migrating orders:', error);
+    }
+}
+
 function waFormatCurrency(amount) {
     return `৳${parseFloat(amount).toFixed(2)}`;
 }
@@ -1043,5 +1111,6 @@ module.exports = {
     pendingDiamondRequests,
     pendingUserIds,
     waFormatCurrency,
-    savePaymentTransaction
+    savePaymentTransaction,
+    migrateOldOrdersToTransactions
 };

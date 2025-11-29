@@ -8,7 +8,7 @@ const io = require('socket.io-client');
 const db = require('./config/database');
 const { showWhatsAppDashboard } = require('./handlers/dashboard');
 const { processPaymentReceipt } = require('./utils/payment-processor');
-const { handleDiamondRequest, handleMultiLineDiamondRequest, approvePendingDiamond, findPendingDiamondByUser, showPendingRequests, cancelDiamondRequest, pendingDiamondRequests } = require('./handlers/diamond-request');
+const { handleDiamondRequest, handleMultiLineDiamondRequest, approvePendingDiamond, findPendingDiamondByUser, showPendingRequests, cancelDiamondRequest, pendingDiamondRequests, migrateOldOrdersToTransactions } = require('./handlers/diamond-request');
 const { handleDepositRequest, handleDepositApproval, handleBalanceQuery, showPendingDeposits, showDepositStats } = require('./handlers/deposit');
 
 // Connect to Admin Panel Socket.IO server
@@ -89,6 +89,9 @@ client.on('ready', () => {
     currentQRCode = null; // Clear QR code when connected
     console.log('✅ WhatsApp Bot Ready!');
     console.log('🤖 Bot is now listening for messages...\n');
+    
+    // 🔥 Migrate old approved orders to admin panel on startup
+    migrateOldOrdersToTransactions();
     
     // Start periodic check for deleted messages (every 15 seconds)
     startDeletedMessageChecker(client);
