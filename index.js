@@ -12,7 +12,13 @@ const { handleDiamondRequest, handleMultiLineDiamondRequest, approvePendingDiamo
 const { handleDepositRequest, handleDepositApproval, handleBalanceQuery, showPendingDeposits, showDepositStats } = require('./handlers/deposit');
 
 // Connect to Admin Panel Socket.IO server
-const adminSocket = io('http://localhost:3000');
+const adminSocket = io('http://localhost:3000', {
+    reconnection: true,
+    reconnectionDelay: 1000,
+    reconnectionDelayMax: 5000,
+    reconnectionAttempts: 99999,
+    transports: ['websocket', 'polling']
+});
 
 adminSocket.on('connect', () => {
     console.log('✅ Connected to Admin Panel');
