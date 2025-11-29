@@ -1,4 +1,4 @@
-run = "bash setup.sh && node start-all.js"
+run = "npm install --legacy-peer-deps && node start-all.js"
 modules = ["nodejs-20"]
 
 [env]

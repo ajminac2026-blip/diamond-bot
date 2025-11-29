@@ -11,9 +11,10 @@
     pkgs.libappindicator
     pkgs.libxrender
     pkgs.xorg.libX11
+    pkgs.xorg.libxext
+    pkgs.xorg.libxfixes
+    pkgs.xorg.libxrandr
     pkgs.xorg.libxcb
-    pkgs.xorg.libXext
-    pkgs.xorg.libXfixes
-    pkgs.xorg.libXrandr
+    pkgs.xorg.libxkbcommon
   ];
 }
