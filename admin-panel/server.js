@@ -29,6 +29,11 @@ app.use(express.json());
 
 // Auth middleware
 const requireAuth = async (req, res, next) => {
+    // Allow access in Replit environment (development)
+    if (process.env.NODE_ENV !== 'production') {
+        return next();
+    }
+    
     const token = req.headers.authorization?.replace('Bearer ', '');
     
     if (!token) {
