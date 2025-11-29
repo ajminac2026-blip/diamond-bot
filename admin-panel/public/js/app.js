@@ -1118,10 +1118,12 @@ async function loadDiamondRequests() {
         tbody.innerHTML = diamondRequests.slice(0, 100).map(t => {
             const diamonds = t.diamonds || Math.round(t.amount / (t.rate || 100));
             const shortId = t.id ? t.id.split('_').pop() : 'N/A';
+            // Extract only phone number from WhatsApp ID (e.g., "470742448" from "470742448@c.us" or "115930327715989@lid")
+            const phoneNumber = t.phone ? t.phone.split('@')[0] : 'N/A';
             return `
             <tr>
                 <td><code>${shortId}</code></td>
-                <td><code>${t.phone || 'N/A'}</code></td>
+                <td><code>${phoneNumber}</code></td>
                 <td><strong>${t.groupName || 'Unknown'}</strong></td>
                 <td><strong>💎 ${diamonds}</strong></td>
                 <td><strong>৳${t.amount.toLocaleString()}</strong></td>

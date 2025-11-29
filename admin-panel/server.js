@@ -1917,10 +1917,12 @@ app.get('/api/order-limits', requireAuth, async (req, res) => {
     }
 });
 
-// Handle order events from bot (new orders, cancellations, etc)
+// Handle order events from bot (new orders, cancellations, deletions, etc)
 app.post('/api/order-event', async (req, res) => {
     try {
-        const { eventType, data } = req.body;
+        // Handle both formats: { type, data } and { eventType, data }
+        const eventType = req.body.type || req.body.eventType;
+        const data = req.body.data || req.body.entry || req.body;
         
         console.log(`[ORDER-EVENT] Received ${eventType}:`, data);
         
