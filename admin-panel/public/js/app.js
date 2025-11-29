@@ -181,6 +181,22 @@ function initSocketListeners() {
         console.log('Auto-deductions cleared');
         loadLastAutoDeduction();
     });
+
+    socket.on('orderEventReceived', (eventData) => {
+        console.log('🔔 Order event received:', eventData.eventType, eventData.data);
+        
+        // Auto-refresh transactions when new order comes in
+        if (eventData.eventType === 'new-order' || eventData.eventType === 'order-cancelled' || eventData.eventType === 'order-deleted') {
+            console.log('🔄 Refreshing Diamond Requests...');
+            loadDiamondRequests(); // Refresh the Diamond Requests list
+            loadTransactions(); // Refresh all transactions
+            
+            // Show notification for new orders
+            if (eventData.eventType === 'new-order') {
+                showToast(`💎 নতুন অর্ডার: ${eventData.data.diamonds || 0}💎 from ${eventData.data.userName || 'Unknown'}`, 'info');
+            }
+        }
+    });
 }
 
 // View Navigation

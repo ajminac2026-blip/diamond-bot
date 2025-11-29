@@ -1917,6 +1917,27 @@ app.get('/api/order-limits', requireAuth, async (req, res) => {
     }
 });
 
+// Handle order events from bot (new orders, cancellations, etc)
+app.post('/api/order-event', async (req, res) => {
+    try {
+        const { eventType, data } = req.body;
+        
+        console.log(`[ORDER-EVENT] Received ${eventType}:`, data);
+        
+        // Emit to all connected admin panels in real-time
+        io.emit('orderEventReceived', {
+            eventType,
+            data,
+            timestamp: new Date().toISOString()
+        });
+        
+        res.json({ success: true, message: `${eventType} processed` });
+    } catch (error) {
+        console.error('[ORDER-EVENT] Error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 // Update order limits
 app.post('/api/order-limits', requireAuth, async (req, res) => {
     try {
