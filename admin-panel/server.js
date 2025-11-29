@@ -1960,20 +1960,6 @@ io.on('connection', (socket) => {
     });
 });
 
-// Watch for file changes and emit updates
-const chokidar = require('chokidar');
-const watcher = chokidar.watch([usersPath, transactionsPath, databasePath], {
-    persistent: true,
-    ignoreInitial: true
-});
-
-watcher.on('change', (path) => {
-    console.log(`File ${path} changed, emitting update...`);
-    io.emit('dataUpdated', { timestamp: Date.now() });
-});
-
-// This route was moved to the top with auth middleware
-
 // Start server
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`\n🎉 Admin Panel Started Successfully!`);
