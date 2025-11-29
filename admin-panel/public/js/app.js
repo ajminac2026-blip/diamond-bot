@@ -1082,26 +1082,38 @@ async function loadDiamondRequests() {
         const allTransactions = await response.json();
         
         // Filter only manual type transactions
-        const diamondRequests = allTransactions.filter(t => t.type === 'manual' || t.type === 'deposit');
+        let diamondRequests = allTransactions.filter(t => t.type === 'manual' || t.type === 'deposit');
+
+        // Sort by: pending first, then by date (newest first)
+        diamondRequests.sort((a, b) => {
+            if (a.status !== b.status) {
+                return a.status === 'pending' ? -1 : 1;
+            }
+            return new Date(b.date) - new Date(a.date);
+        });
 
         const tbody = document.getElementById('diamondRequestsTable');
         
         if (diamondRequests.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" class="loading">No diamond requests found</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" class="loading">No diamond requests found</td></tr>';
             return;
         }
 
-        tbody.innerHTML = diamondRequests.slice(0, 100).map(t => `
+        tbody.innerHTML = diamondRequests.slice(0, 100).map(t => {
+            const diamonds = t.diamonds || Math.round(t.amount / (t.rate || 100));
+            const shortId = t.id ? t.id.split('_').pop() : 'N/A';
+            return `
             <tr>
-                <td><code>${t.id?.substring(0, 8) || 'N/A'}...</code></td>
-                <td><strong>${t.groupName || t.phone || 'Unknown'}</strong></td>
-                <td><strong>💎 ${Math.round(t.amount / 100)}</strong></td>
+                <td><code>${shortId}</code></td>
+                <td><code>${t.phone || 'N/A'}</code></td>
+                <td><strong>${t.groupName || 'Unknown'}</strong></td>
+                <td><strong>💎 ${diamonds}</strong></td>
                 <td><strong>৳${t.amount.toLocaleString()}</strong></td>
                 <td><span class="status-badge status-${t.status}">${t.status}</span></td>
                 <td>${t.method || 'manual'}</td>
                 <td>${new Date(t.date).toLocaleString('bn-BD')}</td>
             </tr>
-        `).join('');
+        `}).join('');
     } catch (error) {
         console.error('Error loading diamond requests:', error);
     }
@@ -1109,23 +1121,35 @@ async function loadDiamondRequests() {
 
 // Filter Diamond Requests
 function filterDiamondRequests() {
-    const searchInput = document.getElementById('diamondRequestSearch');
-    const filter = searchInput.value.toLowerCase();
+    const searchInput = document.getElementById('diamondRequestSearch').value.toLowerCase();
+    const playerIdInput = document.getElementById('playerIdFilter').value.toLowerCase();
     const tbody = document.getElementById('diamondRequestsTable');
     const rows = tbody.getElementsByTagName('tr');
 
     for (let i = 0; i < rows.length; i++) {
         const cells = rows[i].getElementsByTagName('td');
-        let match = false;
-        
-        for (let j = 0; j < cells.length; j++) {
-            if (cells[j].textContent.toLowerCase().includes(filter)) {
-                match = true;
-                break;
+        let matchSearch = false;
+        let matchPlayerId = true;
+
+        // Check search filter (ID, group name)
+        if (searchInput === '') {
+            matchSearch = true;
+        } else {
+            for (let j = 0; j < cells.length; j++) {
+                if (cells[j].textContent.toLowerCase().includes(searchInput)) {
+                    matchSearch = true;
+                    break;
+                }
             }
         }
-        
-        rows[i].style.display = match ? '' : 'none';
+
+        // Check player ID filter (column 1 - Player ID)
+        if (playerIdInput !== '') {
+            const playerIdCell = cells[1]?.textContent.toLowerCase() || '';
+            matchPlayerId = playerIdCell.includes(playerIdInput);
+        }
+
+        rows[i].style.display = (matchSearch && matchPlayerId) ? '' : 'none';
     }
 }
 

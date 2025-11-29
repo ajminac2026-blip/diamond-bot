@@ -334,15 +334,22 @@
 
             <!-- Diamond Requests (Manual Deposits Only) -->
             <div class="tab-content" id="diamondRequestsTab">
-                <div class="search-bar">
-                    <i class="fas fa-search"></i>
-                    <input type="text" id="diamondRequestSearch" placeholder="Search by ID or group name..." onkeyup="filterDiamondRequests()">
+                <div class="search-bar" style="display: flex; gap: 15px;">
+                    <div style="flex: 1; display: flex; align-items: center;">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="diamondRequestSearch" placeholder="Search by ID or group name..." onkeyup="filterDiamondRequests()" style="flex: 1;">
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <label for="playerIdFilter" style="color: #eee; font-weight: 600;">Player ID:</label>
+                        <input type="text" id="playerIdFilter" placeholder="Filter by player..." onkeyup="filterDiamondRequests()" style="min-width: 180px;">
+                    </div>
                 </div>
                 <div class="table-container">
                     <table class="data-table">
                         <thead>
                             <tr>
                                 <th>Request ID</th>
+                                <th>Player ID</th>
                                 <th>Group Name</th>
                                 <th>💎 Diamonds</th>
                                 <th>Amount (৳)</th>
