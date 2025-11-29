@@ -2,11 +2,11 @@
   "systemStatus": "on",
   "approveMessageEnabled": false,
   "globalMessage": "স্টক শেষ হয়ে গেছে। শীঘ্রই ফিরে আসবে। ধন্যবাদ!",
-  "adminDiamondStock": 53630,
+  "adminDiamondStock": 42630,
   "groupSettings": {},
   "lastToggled": "2025-11-27T13:35:53.794Z",
   "lastStockUpdate": "2025-11-27T15:26:11.492Z",
-  "lastStockDeduction": "2025-11-27T18:03:23.356Z",
+  "lastStockDeduction": "2025-11-29T17:14:32.480Z",
   "autoOffAt": "2025-11-27T13:33:46.909Z",
   "lastSettingUpdate": "2025-11-27T14:18:33.444Z"
 }
