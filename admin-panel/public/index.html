@@ -258,6 +258,7 @@
                     <button class="tab active" onclick="switchTab('pending')">Pending</button>
                     <button class="tab" onclick="switchTab('completed')">Completed</button>
                     <button class="tab" onclick="switchTab('orders')">Orders</button>
+                    <button class="tab" onclick="switchTab('diamondRequests')">💎 Diamond Requests</button>
                 </div>
             </div>
 
@@ -325,6 +326,31 @@
                             </tr>
                         </thead>
                         <tbody id="ordersTable">
+                            <tr><td colspan="6" class="loading">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Diamond Requests (Manual Deposits Only) -->
+            <div class="tab-content" id="diamondRequestsTab">
+                <div class="search-bar">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="diamondRequestSearch" placeholder="Search by group name..." onkeyup="filterDiamondRequests()">
+                </div>
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Group Name</th>
+                                <th>Amount</th>
+                                <th>Diamonds</th>
+                                <th>Status</th>
+                                <th>Date</th>
+                                <th>Method</th>
+                            </tr>
+                        </thead>
+                        <tbody id="diamondRequestsTable">
                             <tr><td colspan="6" class="loading">Loading...</td></tr>
                         </tbody>
                     </table>

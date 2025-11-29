@@ -1075,6 +1075,59 @@ async function loadTransactions() {
     }
 }
 
+// Load Diamond Requests (Manual Deposits Only)
+async function loadDiamondRequests() {
+    try {
+        const response = await authFetch('/api/transactions');
+        const allTransactions = await response.json();
+        
+        // Filter only manual type transactions
+        const diamondRequests = allTransactions.filter(t => t.type === 'manual' || t.type === 'deposit');
+
+        const tbody = document.getElementById('diamondRequestsTable');
+        
+        if (diamondRequests.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="loading">No diamond requests found</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = diamondRequests.slice(0, 100).map(t => `
+            <tr>
+                <td><strong>${t.groupName || t.phone || 'Unknown'}</strong></td>
+                <td>৳${t.amount.toLocaleString()}</td>
+                <td>💎 ${Math.round(t.amount / 100)}</td>
+                <td><span class="status-badge status-${t.status}">${t.status}</span></td>
+                <td>${new Date(t.date).toLocaleString('bn-BD')}</td>
+                <td>${t.method || 'manual'}</td>
+            </tr>
+        `).join('');
+    } catch (error) {
+        console.error('Error loading diamond requests:', error);
+    }
+}
+
+// Filter Diamond Requests
+function filterDiamondRequests() {
+    const searchInput = document.getElementById('diamondRequestSearch');
+    const filter = searchInput.value.toLowerCase();
+    const tbody = document.getElementById('diamondRequestsTable');
+    const rows = tbody.getElementsByTagName('tr');
+
+    for (let i = 0; i < rows.length; i++) {
+        const cells = rows[i].getElementsByTagName('td');
+        let match = false;
+        
+        for (let j = 0; j < cells.length; j++) {
+            if (cells[j].textContent.toLowerCase().includes(filter)) {
+                match = true;
+                break;
+            }
+        }
+        
+        rows[i].style.display = match ? '' : 'none';
+    }
+}
+
 // Load Pending Deposits
 async function loadPendingDeposits() {
     try {
@@ -1304,6 +1357,17 @@ function switchTab(tabName) {
     });
 
     document.getElementById(tabName + 'Tab').classList.add('active');
+
+    // Load data for specific tabs
+    if (tabName === 'diamondRequests') {
+        loadDiamondRequests();
+    } else if (tabName === 'pending') {
+        loadPendingDeposits();
+    } else if (tabName === 'completed') {
+        loadTransactions();
+    } else if (tabName === 'orders') {
+        loadOrders();
+    }
 }
 
 // Filter Functions
