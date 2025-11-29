@@ -1,7 +1,10 @@
-run = "npm install --legacy-peer-deps && node start-all.js"
+run = "npm install --legacy-peer-deps && npm run start"
 modules = ["nodejs-20"]
+entrypoint = "index.js"
 
 [env]
 NODE_ENV = "development"
 ADMIN_PORT = "3000"
 BOT_API_PORT = "3001"
+LD_LIBRARY_PATH = "/nix/store/*/lib"
+PUPPETEER_EXECUTABLE_PATH = "/usr/bin/chromium-browser"

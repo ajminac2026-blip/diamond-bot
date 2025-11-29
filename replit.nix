@@ -2,6 +2,17 @@
   deps = [
     pkgs.nodejs_20
     pkgs.chromium
+    pkgs.chromiumBeta
+    pkgs.libuuid
+    pkgs.libxcb
+    pkgs.libxkbcommon
+    pkgs.libxrandr
+    pkgs.libxinerama
+    pkgs.libxcursor
+    pkgs.libxi
+    pkgs.libxext
+    pkgs.libxfixes
+    pkgs.libxdamage
     pkgs.nss
     pkgs.nspr
     pkgs.dbus
@@ -10,11 +21,25 @@
     pkgs.libgconf
     pkgs.libappindicator
     pkgs.libxrender
+    pkgs.libxscrnsaver
+    pkgs.glib
+    pkgs.gtk3
+    pkgs.pango
+    pkgs.cairo
+    pkgs.fontconfig
+    pkgs.libfreetype
+    pkgs.atk
+    pkgs.at-spi2-atk
+    pkgs.at-spi2-core
+    pkgs.mesa
+    pkgs.libGL
+    pkgs.libxkbcommon
     pkgs.xorg.libX11
-    pkgs.xorg.libxext
-    pkgs.xorg.libxfixes
-    pkgs.xorg.libxrandr
     pkgs.xorg.libxcb
-    pkgs.xorg.libxkbcommon
+    pkgs.xorg.xcbutil
+    pkgs.xorg.xcbutilimage
+    pkgs.xorg.xcbutilkeysyms
+    pkgs.xorg.xcbutilrenderutil
+    pkgs.xorg.xcbutilwm
   ];
 }

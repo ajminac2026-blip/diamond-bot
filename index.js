@@ -12,30 +12,14 @@ const { handleDiamondRequest, handleMultiLineDiamondRequest, approvePendingDiamo
 const { handleDepositRequest, handleDepositApproval, handleBalanceQuery, showPendingDeposits, showDepositStats } = require('./handlers/deposit');
 
 // Connect to Admin Panel Socket.IO server
-const adminSocket = io('http://localhost:3000', {
-    reconnection: true,
-    reconnectionDelay: 2000,
-    reconnectionDelayMax: 10000,
-    reconnectionAttempts: Infinity,
-    transports: ['websocket', 'polling'],
-    forceNew: false,
-    multiplex: true
-});
+const adminSocket = io('http://localhost:3000');
 
 adminSocket.on('connect', () => {
     console.log('✅ Connected to Admin Panel');
 });
 
-adminSocket.on('disconnect', (reason) => {
-    console.log(`❌ Disconnected from Admin Panel - Reason: ${reason}`);
-});
-
-adminSocket.on('connect_error', (error) => {
-    console.log(`⚠️ Connection error: ${error.message}`);
-});
-
-adminSocket.on('error', (error) => {
-    console.log(`⚠️ Socket error: ${error}`);
+adminSocket.on('disconnect', () => {
+    console.log('❌ Disconnected from Admin Panel');
 });
 
 // Initialize database files
@@ -55,7 +39,35 @@ const client = new Client({
             '--disable-setuid-sandbox',
             '--disable-dev-shm-usage',
             '--disable-gpu',
-            '--disable-extensions'
+            '--disable-web-resources',
+            '--disable-extensions',
+            '--disable-component-extensions-with-background-pages',
+            '--disable-default-apps',
+            '--disable-preconnect',
+            '--disable-component-update',
+            '--disable-sync',
+            '--disable-default-extensions',
+            '--disable-translate',
+            '--disable-background-networking',
+            '--disable-client-side-phishing-detection',
+            '--disable-popup-blocking',
+            '--disable-prompt-on-repost',
+            '--disable-hang-monitor',
+            '--disable-background-timer-throttling',
+            '--disable-backgrounding-occluded-windows',
+            '--disable-breakpad',
+            '--disable-client-side-phishing-detection',
+            '--disable-default-apps',
+            '--disable-device-discovery-notifications',
+            '--disable-extensions',
+            '--disable-features=TranslateUI',
+            '--disable-hang-monitor',
+            '--disable-ipc-flooding-protection',
+            '--disable-popup-blocking',
+            '--disable-prompt-on-repost',
+            '--no-default-browser-check',
+            '--no-first-run',
+            '--disable-background-networking'
         ]
     }
 });

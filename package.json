@@ -4,7 +4,7 @@
   "description": "WhatsApp Diamond Tracker Bot",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
+    "start": "node start-all.js",
     "admin": "node admin/server.js",
     "all": "node start-all.js",
     "dev": "node index.js & node admin/server.js"
