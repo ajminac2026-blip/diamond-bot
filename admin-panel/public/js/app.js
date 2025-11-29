@@ -29,8 +29,13 @@ async function authFetch(url, options = {}) {
     
     const headers = {
         ...options.headers,
-        'Authorization': `Bearer ${token}`
+        'Content-Type': 'application/json'
     };
+    
+    // Only add token if it exists
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+    }
     
     const response = await fetch(url, { ...options, headers });
     
