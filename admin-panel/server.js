@@ -1,4 +1,5 @@
-﻿const express = require('express');
+﻿require('dotenv').config();
+const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
 const path = require('path');
@@ -29,8 +30,10 @@ app.use(express.json());
 
 // Auth middleware
 const requireAuth = async (req, res, next) => {
-    // Skip auth in development mode
-    if (process.env.NODE_ENV === 'development') {
+    // Skip auth in development mode or if NODE_ENV is not set
+    const isDev = process.env.NODE_ENV === 'development' || !process.env.NODE_ENV;
+    if (isDev) {
+        console.log(`[AUTH] Skipping auth for ${req.method} ${req.path} (Development Mode)`);
         return next();
     }
     
