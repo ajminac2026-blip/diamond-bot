@@ -1165,7 +1165,12 @@ async function loadOrders() {
         const response = await fetch('/api/orders');
         allOrders = await response.json();
 
-        const tbody = document.getElementById('ordersTable');
+        const tbody = document.getElementById('ordersTableNew');
+        
+        if (!tbody) {
+            console.warn('ordersTableNew element not found');
+            return;
+        }
         
         if (allOrders.length === 0) {
             tbody.innerHTML = '<tr><td colspan="6" class="loading">No orders found</td></tr>';
