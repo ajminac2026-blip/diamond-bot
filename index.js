@@ -163,6 +163,8 @@ client.on('message', async (msg) => {
             let matchedKeyword = null;
             
             for (const [methodName, methodConfig] of Object.entries(paymentKeywordsConfig.methods)) {
+                if (!methodConfig.enabled) continue; // Skip disabled methods
+                
                 const keyword = methodConfig.keywords.find(kw => messageBody.includes(kw.toLowerCase()));
                 if (keyword) {
                     matchedMethod = methodName;
@@ -180,60 +182,53 @@ client.on('message', async (msg) => {
                     
                     const methodConfig = paymentKeywordsConfig.methods[matchedMethod];
                     
-                    let numbersText = '';
+                    // Find matching payment numbers for this method
+                    const matchedNumbers = paymentConfig.paymentNumbers.filter(p => 
+                        p.method.toLowerCase() === matchedMethod.toLowerCase()
+                    );
                     
-                    if (matchedMethod === 'bkash') {
-                        const bkash = paymentConfig.paymentNumbers.find(m => m.method.toLowerCase() === 'bkash');
-                        if (bkash) {
-                            numbersText = `📱 *${bkash.method}* (${bkash.type})\n📞 ${bkash.number}`;
-                        }
-                    } else if (matchedMethod === 'nagad') {
-                        const nagad = paymentConfig.paymentNumbers.find(m => m.method.toLowerCase() === 'nagad');
-                        if (nagad) {
-                            numbersText = `📱 *${nagad.method}* (${nagad.type})\n📞 ${nagad.number}`;
-                        }
-                    } else if (matchedMethod === 'rocket') {
-                        const rocket = paymentConfig.paymentNumbers.find(m => m.method.toLowerCase() === 'rocket');
-                        if (rocket) {
-                            numbersText = `📱 *${rocket.method}* (${rocket.type})\n📞 ${rocket.number}`;
-                        }
-                    } else if (matchedMethod === 'bank') {
-                        const bank = paymentConfig.paymentNumbers.find(m => m.method.toLowerCase().includes('bank') || m.isBank);
-                        if (bank && bank.isBank) {
-                            numbersText = `🏦 *${bank.method}*\n`;
-                            numbersText += `👤 *Account Name:* ${bank.accountName || 'N/A'}\n`;
-                            numbersText += `🏢 *Branch:* ${bank.branch || 'N/A'}\n`;
-                            numbersText += `🔢 *Account Number:* ${bank.accountNumber || bank.number}\n`;
-                            numbersText += `📋 *Type:* ${bank.type}`;
-                        }
-                    } else if (matchedMethod === 'all') {
-                        // Show all payment methods
-                        paymentConfig.paymentNumbers.forEach((method, index) => {
-                            if (method.isBank) {
-                                numbersText += `${index + 1}. 🏦 *${method.method}*\n`;
-                                numbersText += `   👤 ${method.accountName || 'N/A'}\n`;
-                                numbersText += `   🏢 ${method.branch || 'N/A'}\n`;
-                                numbersText += `   🔢 ${method.accountNumber || method.number}\n`;
-                                numbersText += `   📋 ${method.type}\n\n`;
-                            } else {
-                                numbersText += `${index + 1}. *${method.method}* (${method.type})\n   📞 ${method.number}\n\n`;
-                            }
-                        });
-                    }
-                    
-                    if (!numbersText) {
-                        await msg.reply('❌ Payment method not available. Please contact admin.');
+                    if (matchedNumbers.length === 0) {
+                        await msg.reply(`❌ ${matchedMethod} পেমেন্ট নম্বর পাওয়া যায়নি। অ্যাডমিনকে যোগাযোগ করুন।`);
                         return;
                     }
                     
-                    // Use custom response template with {paymentNumbers} placeholder
-                    const responseMessage = methodConfig.response.replace('{paymentNumbers}', numbersText);
+                    let numbersText = '';
+                    
+                    // Format each matched payment number
+                    matchedNumbers.forEach((payment, index) => {
+                        if (payment.isBank) {
+                            numbersText += `🏦 *${payment.method}*\n`;
+                            numbersText += `👤 একাউন্ট: ${payment.accountName || 'N/A'}\n`;
+                            numbersText += `🏢 শাখা: ${payment.branch || 'N/A'}\n`;
+                            numbersText += `🔢 নম্বর: ${payment.accountNumber || payment.number}\n`;
+                            numbersText += `📋 ধরন: ${payment.type}\n`;
+                            if (index < matchedNumbers.length - 1) numbersText += '\n';
+                        } else {
+                            numbersText += `📱 *${payment.method}* (${payment.type})\n`;
+                            numbersText += `📞 ${payment.number}\n`;
+                            if (index < matchedNumbers.length - 1) numbersText += '\n';
+                        }
+                    });
+                    
+                    // Use custom response template from payment-keywords config
+                    let responseMessage = methodConfig.response || '';
+                    
+                    // Replace placeholder if exists
+                    responseMessage = responseMessage.replace('{paymentNumbers}', numbersText);
+                    
+                    // If response doesn't have placeholder, append numbers at end
+                    if (!methodConfig.response.includes('{paymentNumbers}')) {
+                        responseMessage = responseMessage + '\n\n' + numbersText;
+                    }
+                    
+                    // Add footer with instructions
+                    responseMessage += '\n\n✅ পেমেন্ট করার পর স্ক্রিনশট পাঠান।';
                     
                     await msg.reply(responseMessage);
                     console.log(`[PAYMENT-INFO] Sent ${matchedMethod} payment info to ${fromUserId} (keyword: ${matchedKeyword})`);
                 } catch (error) {
                     console.error('[PAYMENT-INFO ERROR]', error);
-                    await msg.reply('❌ Payment information not available. Please contact admin.');
+                    await msg.reply('❌ পেমেন্ট তথ্য পাওয়া যায়নি। অ্যাডমিনকে যোগাযোগ করুন।');
                 }
                 return;
             }

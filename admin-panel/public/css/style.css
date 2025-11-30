@@ -330,6 +330,53 @@ body {
     padding: 0 5px;
 }
 
+/* Pagination Controls (New Pagination System) */
+.pagination-controls {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    margin: 20px 0;
+    flex-wrap: wrap;
+}
+
+.pagination-btn {
+    padding: 8px 12px;
+    border: 1px solid var(--border-color);
+    background: var(--card-bg);
+    color: var(--text-primary);
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: 14px;
+    min-width: 40px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    justify-content: center;
+}
+
+.pagination-btn:hover {
+    background: var(--primary-color);
+    border-color: var(--primary-color);
+    color: white;
+    transform: translateY(-2px);
+}
+
+.pagination-btn.active {
+    background: var(--primary-color);
+    border-color: var(--primary-color);
+    color: white;
+    font-weight: bold;
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+}
+
+.pagination-ellipsis {
+    color: var(--text-secondary);
+    padding: 0 5px;
+    font-weight: bold;
+}
+
 .data-table {
     width: 100%;
     border-collapse: collapse;
@@ -1609,16 +1656,61 @@ body {
         grid-template-columns: 1fr;
     }
     
-    .group-info-quick {
-        flex-direction: column;
+    .group-header-collapsed {
+        flex-wrap: wrap;
+        padding: 12px 10px;
+        gap: 12px;
+    }
+
+    .group-name-main {
+        font-size: 0.95rem;
         gap: 8px;
-        font-size: 0.85rem;
-        margin: 10px 0;
+        flex: 0 1 auto;
+        min-width: 120px;
+    }
+
+    .group-name-main i {
+        font-size: 1rem;
+    }
+
+    .group-info-quick {
+        flex-direction: row;
+        gap: 8px;
+        font-size: 0.8rem;
+        margin: 0;
+        padding: 6px 8px;
+        order: 3;
+        width: 100%;
+        justify-content: space-around;
+        background: rgba(79, 172, 254, 0.05);
     }
 
     .quick-info-item {
-        width: 100%;
-        justify-content: space-between;
+        width: auto;
+        justify-content: center;
+        flex-direction: column;
+        align-items: center;
+        gap: 2px;
+    }
+
+    .info-label {
+        font-size: 0.7rem;
+        color: var(--text-secondary);
+    }
+
+    .info-value {
+        font-size: 0.85rem;
+    }
+
+    .reminder-toggle-btn {
+        font-size: 1rem !important;
+        padding: 4px 8px !important;
+    }
+
+    .expand-icon {
+        padding: 6px 8px;
+        margin: 0;
+        order: 2;
     }
 
     .due-item {
@@ -2410,8 +2502,22 @@ body {
     }
 
     /* Mobile-Friendly Table */
+    .section {
+        padding: 15px;
+    }
+
+    .section h2 {
+        font-size: 1.1rem;
+        margin-bottom: 15px;
+    }
+
+    .table-container {
+        overflow-x: hidden;
+    }
+
     .data-table {
-        font-size: 0.75rem;
+        font-size: 0.8rem;
+        width: 100%;
     }
 
     .data-table thead {
@@ -2420,33 +2526,72 @@ body {
 
     .data-table tbody tr {
         display: block;
-        margin-bottom: 15px;
+        margin-bottom: 12px;
         border: 1px solid var(--border-color);
         border-radius: 8px;
-        padding: 10px;
-        background: var(--card-bg);
+        padding: 12px;
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.02) 100%);
+    }
+
+    .data-table tbody tr:last-child {
+        margin-bottom: 0;
     }
 
     .data-table tbody td {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 8px 10px;
+        padding: 8px 0;
         border: none;
         text-align: right;
+        gap: 10px;
+    }
+
+    .data-table tbody td:first-child {
+        padding-top: 0;
+    }
+
+    .data-table tbody td:last-child {
+        padding-bottom: 0;
     }
 
     .data-table tbody td:before {
         content: attr(data-label);
-        font-weight: bold;
+        font-weight: 600;
         text-align: left;
+        color: var(--primary-color);
+        flex: 0 0 30%;
+        font-size: 0.75rem;
+    }
+
+    .data-table tbody td:before {
         color: var(--text-secondary);
-        flex: 0 0 40%;
     }
 
     .status-badge {
         font-size: 0.7rem;
         padding: 4px 10px;
+        border-radius: 4px;
+    }
+
+    /* Mobile Pagination */
+    .pagination-controls {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 5px;
+        margin: 20px 0;
+        flex-wrap: wrap;
+    }
+
+    .pagination-btn {
+        padding: 6px 10px;
+        font-size: 0.8rem;
+    }
+
+    .pagination-ellipsis {
+        padding: 0 3px;
+        font-size: 0.8rem;
     }
 }
 
@@ -2481,5 +2626,71 @@ body {
     .main-content {
         margin: 0;
         padding: 0;
+    }
+}
+
+/* Tablet/Medium Screen Media Query (768px - 1024px) */
+@media (min-width: 768px) and (max-width: 1024px) {
+    .group-header-collapsed {
+        flex-wrap: nowrap;
+        padding: 15px;
+        gap: 10px;
+    }
+
+    .group-name-main {
+        font-size: 1rem;
+        flex: 0 1 auto;
+        min-width: 150px;
+    }
+
+    .group-info-quick {
+        flex-direction: row;
+        gap: 10px;
+        margin: 0;
+        font-size: 0.85rem;
+        flex: 1;
+        order: auto;
+        width: auto;
+        justify-content: flex-start;
+        background: rgba(79, 172, 254, 0.08);
+    }
+
+    .quick-info-item {
+        width: auto;
+        flex-direction: row;
+        gap: 4px;
+    }
+
+    .info-label {
+        font-size: 0.8rem;
+    }
+
+    .info-value {
+        font-size: 0.9rem;
+    }
+
+    .reminder-toggle-btn {
+        font-size: 1.1rem !important;
+    }
+
+    .expand-icon {
+        padding: 6px 10px;
+    }
+
+    /* Tablet: Table Improvements */
+    .data-table tbody tr {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        padding: 15px;
+    }
+
+    .data-table tbody td {
+        padding: 8px 0;
+    }
+
+    .data-table tbody td:before {
+        flex: 0 0 35%;
+        font-size: 0.8rem;
     }
 }

@@ -75,6 +75,16 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Load initial data
     refreshData();
+
+    // Restore previous view if saved
+    const savedView = localStorage.getItem('currentView');
+    if (savedView && document.getElementById(savedView)) {
+        // Simulate click on the corresponding nav item
+        const navItem = document.querySelector(`.nav-item[onclick*="${savedView}"]`);
+        if (navItem) {
+            navItem.click();
+        }
+    }
 });
 
 // Theme Management
@@ -118,6 +128,7 @@ function initSocketListeners() {
 
     socket.on('dataUpdated', () => {
         console.log('Data updated, refreshing silently...');
+        playNotificationSound(); // Play sound when data is updated (new order)
         if (!isInputFocused) {
             silentRefreshData(); // Only refresh if user is not typing
         }
@@ -193,6 +204,9 @@ function showView(viewId) {
         item.classList.remove('active');
     });
     event.target.closest('.nav-item').classList.add('active');
+
+    // Save current view to localStorage
+    localStorage.setItem('currentView', viewId);
 
     // Load data for specific view
     if (viewId === 'groupsView') {
@@ -1070,10 +1084,10 @@ async function loadTransactions() {
         const manualTransactions = allTransactions.filter(t => t.type === 'manual');
         recentTbody.innerHTML = manualTransactions.slice(0, 5).map(t => `
             <tr>
-                <td>${t.groupName || 'Unknown Group'}</td>
-                <td>৳${t.amount.toLocaleString()}</td>
-                <td>${t.type}</td>
-                <td>${new Date(t.date).toLocaleDateString('bn-BD')}</td>
+                <td data-label="Group Name">${t.groupName || 'Unknown Group'}</td>
+                <td data-label="Amount">৳${t.amount.toLocaleString()}</td>
+                <td data-label="Type">${t.type}</td>
+                <td data-label="Date">${new Date(t.date).toLocaleDateString('bn-BD')}</td>
             </tr>
         `).join('');
         
@@ -1192,7 +1206,10 @@ async function loadOrders() {
     }
 }
 
-// Load Orders for New Orders View
+// Load Orders for New Orders View with Pagination
+let currentOrderPage = 1;
+const ordersPerPage = 20;
+
 async function loadOrdersNew() {
     try {
         const response = await fetch('/api/orders');
@@ -1202,22 +1219,140 @@ async function loadOrdersNew() {
         
         if (allOrders.length === 0) {
             tbody.innerHTML = '<tr><td colspan="6" class="loading">No orders found</td></tr>';
+            document.getElementById('ordersPagination').innerHTML = '';
             return;
         }
 
-        tbody.innerHTML = allOrders.slice(0, 100).map(o => `
+        // Display orders for current page
+        displayOrdersPage(currentOrderPage);
+        
+        // Render pagination controls
+        renderOrdersPagination(allOrders.length);
+    } catch (error) {
+        console.error('Error loading orders:', error);
+    }
+}
+
+// Display orders for a specific page
+function displayOrdersPage(page) {
+    const tbody = document.getElementById('ordersTableNew');
+    const start = (page - 1) * ordersPerPage;
+    const end = start + ordersPerPage;
+    const pageOrders = allOrders.slice(start, end);
+
+    if (pageOrders.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="loading">No orders found</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = pageOrders.map(o => {
+        // Format date to English: MM/DD/YYYY, HH:MM:SS AM/PM
+        const date = new Date(o.date);
+        const formattedDate = date.toLocaleDateString('en-US') + ', ' + date.toLocaleTimeString('en-US');
+        
+        return `
             <tr>
                 <td data-label="Phone">${o.phone}</td>
                 <td data-label="ID/Number">${o.playerId}</td>
                 <td data-label="Diamonds">${o.diamonds}</td>
                 <td data-label="Amount">৳${o.amount.toLocaleString()}</td>
                 <td data-label="Status"><span class="status-badge status-${o.status}">${o.status}</span></td>
-                <td data-label="Date">${new Date(o.date).toLocaleString('bn-BD')}</td>
+                <td data-label="Date">${formattedDate}</td>
             </tr>
-        `).join('');
-    } catch (error) {
-        console.error('Error loading orders:', error);
+        `;
+    }).join('');
+}
+
+// Render pagination controls
+function renderOrdersPagination(totalOrders) {
+    const paginationDiv = document.getElementById('ordersPagination');
+    const totalPages = Math.ceil(totalOrders / ordersPerPage);
+
+    if (totalPages <= 1) {
+        paginationDiv.innerHTML = '';
+        return;
     }
+
+    let html = '<div class="pagination-controls">';
+    
+    // Previous button
+    if (currentOrderPage > 1) {
+        html += `<button class="pagination-btn" onclick="goToOrdersPage(${currentOrderPage - 1})">
+            <i class="fas fa-chevron-left"></i> Previous
+        </button>`;
+    }
+
+    // Page numbers
+    const maxVisible = 5;
+    let startPage = Math.max(1, currentOrderPage - Math.floor(maxVisible / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+    
+    if (endPage - startPage < maxVisible - 1) {
+        startPage = Math.max(1, endPage - maxVisible + 1);
+    }
+
+    if (startPage > 1) {
+        html += `<button class="pagination-btn" onclick="goToOrdersPage(1)">1</button>`;
+        if (startPage > 2) html += `<span class="pagination-ellipsis">...</span>`;
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+        html += `<button class="pagination-btn ${i === currentOrderPage ? 'active' : ''}" 
+                    onclick="goToOrdersPage(${i})">${i}</button>`;
+    }
+
+    if (endPage < totalPages) {
+        if (endPage < totalPages - 1) html += `<span class="pagination-ellipsis">...</span>`;
+        html += `<button class="pagination-btn" onclick="goToOrdersPage(${totalPages})">${totalPages}</button>`;
+    }
+
+    // Next button
+    if (currentOrderPage < totalPages) {
+        html += `<button class="pagination-btn" onclick="goToOrdersPage(${currentOrderPage + 1})">
+            Next <i class="fas fa-chevron-right"></i>
+        </button>`;
+    }
+
+    html += '</div>';
+    paginationDiv.innerHTML = html;
+}
+
+// Navigate to specific orders page
+function goToOrdersPage(page) {
+    const totalPages = Math.ceil(allOrders.length / ordersPerPage);
+    if (page < 1 || page > totalPages) return;
+    
+    currentOrderPage = page;
+    displayOrdersPage(page);
+    renderOrdersPagination(allOrders.length);
+    
+    // Scroll to top of table
+    document.getElementById('ordersTableNew').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// Helper function for paginating filtered results
+let filteredOrdersCache = [];
+function filterOrdersPage(page) {
+    const tbody = document.getElementById('ordersTableNew');
+    const start = (page - 1) * ordersPerPage;
+    const end = start + ordersPerPage;
+    const pageOrders = filteredOrdersCache.slice(start, end);
+
+    tbody.innerHTML = pageOrders.map(o => {
+        const date = new Date(o.date);
+        const formattedDate = date.toLocaleDateString('en-US') + ', ' + date.toLocaleTimeString('en-US');
+        
+        return `
+            <tr>
+                <td data-label="Phone">${o.phone}</td>
+                <td data-label="ID/Number">${o.playerId}</td>
+                <td data-label="Diamonds">${o.diamonds}</td>
+                <td data-label="Amount">৳${o.amount.toLocaleString()}</td>
+                <td data-label="Status"><span class="status-badge status-${o.status}">${o.status}</span></td>
+                <td data-label="Date">${formattedDate}</td>
+            </tr>
+        `;
+    }).join('');
 }
 
 // Load Users
@@ -1361,13 +1496,75 @@ function filterTransactions() {
 }
 
 function filterOrders() {
-    const search = document.getElementById('orderSearch').value.toLowerCase();
-    const rows = document.querySelectorAll('#ordersTable tr');
+    const search = document.getElementById('orderSearchNew').value.toLowerCase();
+    
+    if (!search) {
+        // Reset to page 1 and show all orders
+        currentOrderPage = 1;
+        displayOrdersPage(1);
+        renderOrdersPagination(allOrders.length);
+        return;
+    }
 
-    rows.forEach(row => {
-        const text = row.textContent.toLowerCase();
-        row.style.display = text.includes(search) ? '' : 'none';
+    // Filter orders
+    filteredOrdersCache = allOrders.filter(o => {
+        const phone = o.phone.toLowerCase();
+        const playerId = o.playerId.toLowerCase();
+        const diamonds = o.diamonds.toString();
+        const amount = o.amount.toString();
+        const status = o.status.toLowerCase();
+        
+        return phone.includes(search) || playerId.includes(search) || 
+               diamonds.includes(search) || amount.includes(search) || 
+               status.includes(search);
     });
+
+    // Display filtered results
+    const tbody = document.getElementById('ordersTableNew');
+    
+    if (filteredOrdersCache.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="loading">No matching orders found</td></tr>';
+        document.getElementById('ordersPagination').innerHTML = '';
+        return;
+    }
+
+    // Show first page of filtered results
+    const start = 0;
+    const end = ordersPerPage;
+    const pageOrders = filteredOrdersCache.slice(start, end);
+
+    tbody.innerHTML = pageOrders.map(o => {
+        const date = new Date(o.date);
+        const formattedDate = date.toLocaleDateString('en-US') + ', ' + date.toLocaleTimeString('en-US');
+        
+        return `
+            <tr>
+                <td data-label="Phone">${o.phone}</td>
+                <td data-label="ID/Number">${o.playerId}</td>
+                <td data-label="Diamonds">${o.diamonds}</td>
+                <td data-label="Amount">৳${o.amount.toLocaleString()}</td>
+                <td data-label="Status"><span class="status-badge status-${o.status}">${o.status}</span></td>
+                <td data-label="Date">${formattedDate}</td>
+            </tr>
+        `;
+    }).join('');
+
+    // Show pagination for filtered results if needed
+    if (filteredOrdersCache.length > ordersPerPage) {
+        const totalPages = Math.ceil(filteredOrdersCache.length / ordersPerPage);
+        let paginationHtml = '<div class="pagination-controls">';
+        
+        for (let i = 1; i <= Math.min(totalPages, 5); i++) {
+            paginationHtml += `<button class="pagination-btn ${i === 1 ? 'active' : ''}" 
+                                onclick="filterOrdersPage(${i})">${i}</button>`;
+        }
+        if (totalPages > 5) paginationHtml += `<span class="pagination-ellipsis">...</span>`;
+        
+        paginationHtml += '</div>';
+        document.getElementById('ordersPagination').innerHTML = paginationHtml;
+    } else {
+        document.getElementById('ordersPagination').innerHTML = '';
+    }
 }
 
 // Modal Functions
@@ -2006,12 +2203,38 @@ function showSettingsModal() {
                         </select>
                     </div>
                     
-                    <h3 style="margin-top: 25px;">Notifications</h3>
+                    <h3 style="margin-top: 25px;"><i class="fas fa-bell"></i> Notification Sound</h3>
                     <div style="margin: 15px 0;">
-                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
-                            <input type="checkbox" checked>
-                            <span>Enable Desktop Notifications</span>
+                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; margin-bottom: 10px;">
+                            <input type="checkbox" id="notificationEnabledCheckbox" 
+                                   ${localStorage.getItem('notificationEnabled') !== 'false' ? 'checked' : ''}>
+                            <span>Enable Order Notifications</span>
                         </label>
+                        
+                        <div style="margin: 15px 0;">
+                            <label style="display: block; margin-bottom: 8px; color: var(--text-secondary);">
+                                <i class="fas fa-music"></i> Select Sound:
+                            </label>
+                            <select id="notificationSoundSelect" 
+                                    style="width: 100%; padding: 10px; border-radius: 8px; background: var(--dark-bg); color: var(--text-primary); border: 1px solid var(--border-color);">
+                                <option value="">-- No Sound --</option>
+                                <option value="mixkit-bell-notification-933.wav" ${localStorage.getItem('notificationSound') === 'mixkit-bell-notification-933.wav' ? 'selected' : ''}>Bell Notification</option>
+                                <option value="mixkit-correct-answer-tone-2870.wav" ${localStorage.getItem('notificationSound') === 'mixkit-correct-answer-tone-2870.wav' ? 'selected' : ''}>Correct Answer Tone</option>
+                                <option value="mixkit-digital-quick-tone-2866.wav" ${localStorage.getItem('notificationSound') === 'mixkit-digital-quick-tone-2866.wav' ? 'selected' : ''}>Digital Quick Tone</option>
+                                <option value="mixkit-doorbell-tone-2864.wav" ${localStorage.getItem('notificationSound') === 'mixkit-doorbell-tone-2864.wav' ? 'selected' : ''}>Doorbell Tone</option>
+                                <option value="mixkit-happy-bells-notification-937.wav" ${localStorage.getItem('notificationSound') === 'mixkit-happy-bells-notification-937.wav' ? 'selected' : ''}>Happy Bells</option>
+                                <option value="mixkit-magic-notification-ring-2344.wav" ${localStorage.getItem('notificationSound') === 'mixkit-magic-notification-ring-2344.wav' ? 'selected' : ''}>Magic Notification Ring</option>
+                                <option value="mixkit-message-pop-alert-2354.mp3" ${localStorage.getItem('notificationSound') === 'mixkit-message-pop-alert-2354.mp3' ? 'selected' : ''}>Message Pop Alert</option>
+                                <option value="mixkit-bubble-pop-up-alert-notification-2357.wav" ${localStorage.getItem('notificationSound') === 'mixkit-bubble-pop-up-alert-notification-2357.wav' ? 'selected' : ''}>Bubble Pop Alert</option>
+                                <option value="mixkit-game-notification-wave-alarm-987.wav" ${localStorage.getItem('notificationSound') === 'mixkit-game-notification-wave-alarm-987.wav' ? 'selected' : ''}>Wave Alarm</option>
+                                <option value="mixkit-interface-hint-notification-911.wav" ${localStorage.getItem('notificationSound') === 'mixkit-interface-hint-notification-911.wav' ? 'selected' : ''}>Interface Hint</option>
+                            </select>
+                        </div>
+                        
+                        <button class="btn-primary" onclick="reviewNotificationSound()" 
+                                style="width: 100%; margin-top: 10px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                            <i class="fas fa-volume-up"></i> Review Sound
+                        </button>
                     </div>
                     
                     <h3 style="margin-top: 25px;">Auto-Refresh</h3>
@@ -2022,14 +2245,460 @@ function showSettingsModal() {
                         </label>
                     </div>
                     
+                    <h3 style="margin-top: 25px; color: #f5576c;"><i class="fas fa-lock"></i> Security</h3>
+                    <div style="margin: 15px 0; display: grid; gap: 10px;">
+                        <button class="btn-primary" onclick="showChangeUsernameModal()" style="width: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                            <i class="fas fa-user-edit"></i> Change Username
+                        </button>
+                        <button class="btn-primary" onclick="showChangePasswordModal()" style="width: 100%; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                            <i class="fas fa-key"></i> Change Password
+                        </button>
+                    </div>
+                    
                     <button class="btn-primary" onclick="closeModal()" style="width: 100%; margin-top: 20px;">
-                        <i class="fas fa-save"></i> Save Settings
+                        <i class="fas fa-save"></i> Close
                     </button>
                 </div>
             </div>
         </div>
     `;
     document.getElementById('modalContainer').innerHTML = modal;
+}
+
+// Save Notification Settings to LocalStorage
+function saveNotificationSettings() {
+    const enabled = document.getElementById('notificationEnabledCheckbox').checked;
+    const sound = document.getElementById('notificationSoundSelect').value;
+    
+    localStorage.setItem('notificationEnabled', enabled ? 'true' : 'false');
+    localStorage.setItem('notificationSound', sound);
+    
+    showToast('✅ Notification settings saved! Sound will play when order arrives.', 'success');
+}
+
+// Review Notification Sound (play once to check)
+function reviewNotificationSound() {
+    const sound = document.getElementById('notificationSoundSelect').value;
+    
+    if (!sound) {
+        showToast('Please select a sound first', 'info');
+        return;
+    }
+    
+    // Stop any currently playing review sound
+    if (window.reviewAudio) {
+        window.reviewAudio.pause();
+        window.reviewAudio.currentTime = 0;
+    }
+    
+    // Create and play new review sound (only once)
+    window.reviewAudio = new Audio(`/sounds/${sound}`);
+    window.reviewAudio.volume = 0.8; // Same volume as notification
+    window.reviewAudio.play().catch(err => {
+        console.error('Error playing sound:', err);
+        showToast('Could not play sound', 'error');
+    });
+}
+
+// Play Notification Sound (called when order arrives)
+function playNotificationSound() {
+    const enabled = localStorage.getItem('notificationEnabled') !== 'false';
+    const sound = localStorage.getItem('notificationSound');
+    
+    if (!enabled || !sound) {
+        return;
+    }
+    
+    try {
+        // Stop any currently playing notification sound
+        if (window.notificationAudio) {
+            window.notificationAudio.pause();
+            window.notificationAudio.currentTime = 0;
+        }
+        
+        // Create and play notification sound (only once per order)
+        window.notificationAudio = new Audio(`/sounds/${sound}`);
+        window.notificationAudio.volume = 0.8;
+        window.notificationAudio.play().catch(err => {
+            console.error('Error playing notification sound:', err);
+        });
+        
+        // Prevent multiple plays for same order
+        window.lastNotificationTime = Date.now();
+    } catch (error) {
+        console.error('Error creating audio element:', error);
+    }
+}
+
+// Combined Change Credentials Modal (for More menu)
+function showChangeCredentialsModal() {
+    const modal = `
+        <div class="modal" onclick="closeModal(event)">
+            <div class="modal-content large-modal" onclick="event.stopPropagation()">
+                <div class="modal-header">
+                    <h2><i class="fas fa-lock"></i> Change Credentials</h2>
+                    <button class="modal-close" onclick="closeModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p style="color: var(--text-secondary); margin-bottom: 20px;">
+                        Manage your admin account security. Choose what you want to change below.
+                    </p>
+
+                    <!-- Tabs -->
+                    <div style="display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid var(--border-color);">
+                        <button type="button" class="tab-btn active" onclick="switchCredentialTab('username')" style="padding: 10px 20px; border: none; background: transparent; color: var(--text-primary); cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.3s ease;" id="usernameTab">
+                            <i class="fas fa-user-edit"></i> Username
+                        </button>
+                        <button type="button" class="tab-btn" onclick="switchCredentialTab('password')" style="padding: 10px 20px; border: none; background: transparent; color: var(--text-secondary); cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.3s ease;" id="passwordTab">
+                            <i class="fas fa-key"></i> Password
+                        </button>
+                    </div>
+
+                    <!-- Username Tab Content -->
+                    <div id="credentialUsernameContent" style="display: block;">
+                        <div style="background: rgba(102, 126, 234, 0.1); padding: 12px 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #667eea;">
+                            <p style="font-size: 0.9rem; color: #667eea;">
+                                <i class="fas fa-info-circle"></i> Enter your current password and choose a new username.
+                            </p>
+                        </div>
+
+                        <form onsubmit="handleChangeUsername(event)">
+                            <div class="form-group">
+                                <label class="form-label">
+                                    <i class="fas fa-lock"></i> Current Password
+                                </label>
+                                <input type="password" id="credChangeUsernamePassword" class="form-input" 
+                                       placeholder="Enter your current password" required>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">
+                                    <i class="fas fa-user"></i> New Username
+                                </label>
+                                <input type="text" id="credNewUsername" class="form-input" 
+                                       placeholder="Enter new username (min 3 characters)" required>
+                                <small style="color: var(--text-secondary); margin-top: 5px; display: block;">
+                                    Must be at least 3 characters long
+                                </small>
+                            </div>
+
+                            <button type="submit" class="btn-primary" style="width: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                                <i class="fas fa-save"></i> Change Username
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- Password Tab Content -->
+                    <div id="credentialPasswordContent" style="display: none;">
+                        <div style="background: rgba(245, 87, 108, 0.1); padding: 12px 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #f5576c;">
+                            <p style="font-size: 0.9rem; color: #f5576c;">
+                                <i class="fas fa-shield-alt"></i> Choose a strong password for better security.
+                            </p>
+                        </div>
+
+                        <form onsubmit="handleChangePassword(event)">
+                            <div class="form-group">
+                                <label class="form-label">
+                                    <i class="fas fa-lock"></i> Current Password
+                                </label>
+                                <input type="password" id="credChangePasswordCurrent" class="form-input" 
+                                       placeholder="Enter your current password" required>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">
+                                    <i class="fas fa-key"></i> New Password
+                                </label>
+                                <input type="password" id="credNewPassword" class="form-input" 
+                                       placeholder="Enter new password (min 4 characters)" required>
+                                <small style="color: var(--text-secondary); margin-top: 5px; display: block;">
+                                    Must be at least 4 characters long
+                                </small>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">
+                                    <i class="fas fa-check-circle"></i> Confirm Password
+                                </label>
+                                <input type="password" id="credConfirmPassword" class="form-input" 
+                                       placeholder="Confirm your new password" required>
+                            </div>
+
+                            <button type="submit" class="btn-primary" style="width: 100%; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                                <i class="fas fa-save"></i> Change Password
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    document.getElementById('modalContainer').innerHTML = modal;
+}
+
+// Switch between username and password tabs in credentials modal
+function switchCredentialTab(tab) {
+    // Update content visibility
+    document.getElementById('credentialUsernameContent').style.display = tab === 'username' ? 'block' : 'none';
+    document.getElementById('credentialPasswordContent').style.display = tab === 'password' ? 'block' : 'none';
+
+    // Update tab styling
+    const usernameTab = document.getElementById('usernameTab');
+    const passwordTab = document.getElementById('passwordTab');
+
+    if (tab === 'username') {
+        usernameTab.style.color = 'var(--text-primary)';
+        usernameTab.style.borderBottomColor = '#667eea';
+        passwordTab.style.color = 'var(--text-secondary)';
+        passwordTab.style.borderBottomColor = 'transparent';
+    } else {
+        passwordTab.style.color = 'var(--text-primary)';
+        passwordTab.style.borderBottomColor = '#f5576c';
+        usernameTab.style.color = 'var(--text-secondary)';
+        usernameTab.style.borderBottomColor = 'transparent';
+    }
+}
+
+// Change Username Modal
+function showChangeUsernameModal() {
+    const modal = `
+        <div class="modal" onclick="closeModal(event)">
+            <div class="modal-content" onclick="event.stopPropagation()" style="max-width: 450px;">
+                <div class="modal-header">
+                    <h2><i class="fas fa-user-edit"></i> Change Username</h2>
+                    <button class="modal-close" onclick="closeModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div style="background: rgba(102, 126, 234, 0.1); padding: 12px 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #667eea;">
+                        <p style="font-size: 0.9rem; color: #667eea;">
+                            <i class="fas fa-info-circle"></i> 
+                            You must verify your current password to change your username.
+                        </p>
+                    </div>
+
+                    <form onsubmit="handleChangeUsername(event)">
+                        <div class="form-group">
+                            <label class="form-label">
+                                <i class="fas fa-lock"></i> Current Password
+                            </label>
+                            <input type="password" id="changeUsernameCurrentPassword" class="form-input" 
+                                   placeholder="Enter your current password" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">
+                                <i class="fas fa-user"></i> New Username
+                            </label>
+                            <input type="text" id="newUsername" class="form-input" 
+                                   placeholder="Enter new username (min 3 characters)" required>
+                            <small style="color: var(--text-secondary); margin-top: 5px; display: block;">
+                                Must be at least 3 characters long
+                            </small>
+                        </div>
+
+                        <div style="display: flex; gap: 10px; margin-top: 25px;">
+                            <button type="button" class="btn-secondary" onclick="closeModal()" style="flex: 1;">
+                                Cancel
+                            </button>
+                            <button type="submit" class="btn-primary" style="flex: 1; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                                <i class="fas fa-save"></i> Change Username
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    `;
+    document.getElementById('modalContainer').innerHTML = modal;
+    document.getElementById('changeUsernameCurrentPassword').focus();
+}
+
+// Change Password Modal
+function showChangePasswordModal() {
+    const modal = `
+        <div class="modal" onclick="closeModal(event)">
+            <div class="modal-content" onclick="event.stopPropagation()" style="max-width: 450px;">
+                <div class="modal-header">
+                    <h2><i class="fas fa-key"></i> Change Password</h2>
+                    <button class="modal-close" onclick="closeModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div style="background: rgba(245, 87, 108, 0.1); padding: 12px 15px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #f5576c;">
+                        <p style="font-size: 0.9rem; color: #f5576c;">
+                            <i class="fas fa-shield-alt"></i> 
+                            Choose a strong password for better security.
+                        </p>
+                    </div>
+
+                    <form onsubmit="handleChangePassword(event)">
+                        <div class="form-group">
+                            <label class="form-label">
+                                <i class="fas fa-lock"></i> Current Password
+                            </label>
+                            <input type="password" id="changePasswordCurrentPassword" class="form-input" 
+                                   placeholder="Enter your current password" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">
+                                <i class="fas fa-key"></i> New Password
+                            </label>
+                            <input type="password" id="newPassword" class="form-input" 
+                                   placeholder="Enter new password (min 4 characters)" required>
+                            <small style="color: var(--text-secondary); margin-top: 5px; display: block;">
+                                Must be at least 4 characters long
+                            </small>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">
+                                <i class="fas fa-check-circle"></i> Confirm Password
+                            </label>
+                            <input type="password" id="confirmPassword" class="form-input" 
+                                   placeholder="Confirm your new password" required>
+                        </div>
+
+                        <div style="display: flex; gap: 10px; margin-top: 25px;">
+                            <button type="button" class="btn-secondary" onclick="closeModal()" style="flex: 1;">
+                                Cancel
+                            </button>
+                            <button type="submit" class="btn-primary" style="flex: 1; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                                <i class="fas fa-save"></i> Change Password
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    `;
+    document.getElementById('modalContainer').innerHTML = modal;
+    document.getElementById('changePasswordCurrentPassword').focus();
+}
+
+// Handle Change Username
+async function handleChangeUsername(event) {
+    event.preventDefault();
+
+    // Support both Settings modal and Combined Credentials modal input IDs
+    let currentPassword = document.getElementById('changeUsernameCurrentPassword')?.value;
+    let newUsername = document.getElementById('newUsername')?.value?.trim();
+
+    // Fallback to Combined Credentials modal IDs
+    if (!currentPassword) {
+        currentPassword = document.getElementById('credChangeUsernamePassword')?.value;
+    }
+    if (!newUsername) {
+        newUsername = document.getElementById('credNewUsername')?.value?.trim();
+    }
+
+    if (!currentPassword) {
+        showToast('Current password is required', 'error');
+        return;
+    }
+
+    if (!newUsername || newUsername.length < 3) {
+        showToast('Username must be at least 3 characters', 'error');
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/admin/change-username', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': localStorage.getItem('adminToken')
+            },
+            body: JSON.stringify({
+                currentPassword,
+                newUsername
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showToast('Username changed successfully! Please log in again with your new username.', 'success');
+            setTimeout(() => {
+                // Log out after successful username change
+                logout();
+            }, 2000);
+        } else {
+            showToast(data.message || 'Failed to change username', 'error');
+        }
+    } catch (error) {
+        console.error('Error changing username:', error);
+        showToast('Error changing username', 'error');
+    }
+}
+
+// Handle Change Password
+async function handleChangePassword(event) {
+    event.preventDefault();
+
+    // Support both Settings modal and Combined Credentials modal input IDs
+    let currentPassword = document.getElementById('changePasswordCurrentPassword')?.value;
+    let newPassword = document.getElementById('newPassword')?.value;
+    let confirmPassword = document.getElementById('confirmPassword')?.value;
+
+    // Fallback to Combined Credentials modal IDs
+    if (!currentPassword) {
+        currentPassword = document.getElementById('credChangePasswordCurrent')?.value;
+    }
+    if (!newPassword) {
+        newPassword = document.getElementById('credNewPassword')?.value;
+    }
+    if (!confirmPassword) {
+        confirmPassword = document.getElementById('credConfirmPassword')?.value;
+    }
+
+    if (!currentPassword) {
+        showToast('Current password is required', 'error');
+        return;
+    }
+
+    if (!newPassword || newPassword.length < 4) {
+        showToast('New password must be at least 4 characters', 'error');
+        return;
+    }
+
+    if (newPassword !== confirmPassword) {
+        showToast('Passwords do not match', 'error');
+        return;
+    }
+
+    if (newPassword === currentPassword) {
+        showToast('New password must be different from current password', 'error');
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/admin/change-password', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': localStorage.getItem('adminToken')
+            },
+            body: JSON.stringify({
+                currentPassword,
+                newPassword
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showToast('Password changed successfully! Please log in again with your new password.', 'success');
+            setTimeout(() => {
+                // Log out after successful password change
+                logout();
+            }, 2000);
+        } else {
+            showToast(data.message || 'Failed to change password', 'error');
+        }
+    } catch (error) {
+        console.error('Error changing password:', error);
+        showToast('Error changing password', 'error');
+    }
 }
 
 // Approve Message Modal
@@ -2717,6 +3386,429 @@ function showPaymentKeywordsModal() {
     `;
     document.getElementById('modalContainer').innerHTML = modalHTML;
     document.getElementById('paymentKeywordsModal').style.display = 'flex';
+}
+
+// Command Management Modal
+async function showCommandsModal() {
+    try {
+        const response = await fetch('/api/commands');
+        const commands = await response.json();
+        
+        let commandsHTML = `
+            <div id="commandsModal" class="modal" onclick="if(event.target === this) closeModal()">
+                <div class="modal-content">
+                    <h2><i class="fas fa-terminal"></i> Command Management</h2>
+                    
+                    <div style="margin-top: 20px;">
+                        <h3>User Commands</h3>
+                        <div id="userCommandsList" style="max-height: 300px; overflow-y: auto;">
+        `;
+        
+        if (commands.userCommands && commands.userCommands.length > 0) {
+            commands.userCommands.forEach((cmd, idx) => {
+                commandsHTML += `
+                    <div style="background: #1a1a2e; padding: 10px; margin: 10px 0; border-radius: 8px; border-left: 3px solid #667eea;">
+                        <div><strong>${cmd.command}</strong> - ${cmd.description}</div>
+                        <div style="color: #aaa; font-size: 0.9em; margin-top: 5px;">Response: ${cmd.response}</div>
+                        <button onclick="editCommand(${idx}, 'user')" style="margin-top: 5px; padding: 5px 10px; background: #667eea; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 0.85em;">Edit</button>
+                        <button onclick="deleteCommand(${idx}, 'user')" style="margin-left: 5px; padding: 5px 10px; background: #f5576c; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 0.85em;">Delete</button>
+                    </div>
+                `;
+            });
+        } else {
+            commandsHTML += '<p style="color: #aaa;">No user commands</p>';
+        }
+        
+        commandsHTML += `
+                        </div>
+                        
+                        <h3 style="margin-top: 20px;">Admin Commands</h3>
+                        <div id="adminCommandsList" style="max-height: 300px; overflow-y: auto;">
+        `;
+        
+        if (commands.adminCommands && commands.adminCommands.length > 0) {
+            commands.adminCommands.forEach((cmd, idx) => {
+                commandsHTML += `
+                    <div style="background: #1a1a2e; padding: 10px; margin: 10px 0; border-radius: 8px; border-left: 3px solid #43e97b;">
+                        <div><strong>${cmd.command}</strong> - ${cmd.description}</div>
+                        <div style="color: #aaa; font-size: 0.9em; margin-top: 5px;">Response: ${cmd.response}</div>
+                        <button onclick="editCommand(${idx}, 'admin')" style="margin-top: 5px; padding: 5px 10px; background: #667eea; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 0.85em;">Edit</button>
+                        <button onclick="deleteCommand(${idx}, 'admin')" style="margin-left: 5px; padding: 5px 10px; background: #f5576c; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 0.85em;">Delete</button>
+                    </div>
+                `;
+            });
+        } else {
+            commandsHTML += '<p style="color: #aaa;">No admin commands</p>';
+        }
+        
+        commandsHTML += `
+                        </div>
+                        
+                        <div style="margin-top: 20px;">
+                            <h3>Add New Command</h3>
+                            <input type="text" id="newCommand" placeholder="Command (e.g., !help)" style="width: 100%; padding: 8px; margin: 10px 0; border: 1px solid #2d3561; border-radius: 5px; background: #16213e; color: white;">
+                            <input type="text" id="newCommandDesc" placeholder="Description" style="width: 100%; padding: 8px; margin: 10px 0; border: 1px solid #2d3561; border-radius: 5px; background: #16213e; color: white;">
+                            <input type="text" id="newCommandResponse" placeholder="Response" style="width: 100%; padding: 8px; margin: 10px 0; border: 1px solid #2d3561; border-radius: 5px; background: #16213e; color: white;">
+                            <select id="newCommandType" style="width: 100%; padding: 8px; margin: 10px 0; border: 1px solid #2d3561; border-radius: 5px; background: #16213e; color: white;">
+                                <option value="user">User Command</option>
+                                <option value="admin">Admin Command</option>
+                            </select>
+                            <button onclick="addNewCommand()" style="width: 100%; padding: 10px; background: #43e97b; color: white; border: none; border-radius: 5px; cursor: pointer; margin-top: 10px; font-weight: 600;">Add Command</button>
+                        </div>
+                    </div>
+                    
+                    <button onclick="closeModal()" style="width: 100%; margin-top: 20px; padding: 10px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer;">Close</button>
+                </div>
+            </div>
+        `;
+        
+        document.getElementById('modalContainer').innerHTML = commandsHTML;
+        document.getElementById('commandsModal').style.display = 'flex';
+    } catch (error) {
+        console.error('Error loading commands:', error);
+        showToast('Failed to load commands', 'error');
+    }
+}
+
+async function addNewCommand() {
+    const cmd = document.getElementById('newCommand').value;
+    const desc = document.getElementById('newCommandDesc').value;
+    const resp = document.getElementById('newCommandResponse').value;
+    const type = document.getElementById('newCommandType').value;
+    
+    if (!cmd || !desc || !resp) {
+        showToast('All fields required', 'error');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/commands/add', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ command: cmd, description: desc, response: resp, type })
+        });
+        
+        if (response.ok) {
+            showToast('Command added successfully', 'success');
+            showCommandsModal(); // Refresh modal
+        } else {
+            showToast('Failed to add command', 'error');
+        }
+    } catch (error) {
+        console.error('Error adding command:', error);
+        showToast('Error adding command', 'error');
+    }
+}
+
+function editCommand(index, type) {
+    showToast('Edit feature coming soon', 'info');
+}
+
+async function deleteCommand(index, type) {
+    if (!confirm('Delete this command?')) return;
+    
+    try {
+        const response = await fetch('/api/commands/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ index, type })
+        });
+        
+        if (response.ok) {
+            showToast('Command deleted', 'success');
+            showCommandsModal(); // Refresh modal
+        } else {
+            showToast('Failed to delete command', 'error');
+        }
+    } catch (error) {
+        console.error('Error deleting command:', error);
+        showToast('Error deleting command', 'error');
+    }
+}
+
+// Payment Keywords Modal
+async function showPaymentKeywordsModal() {
+    try {
+        const response = await fetch('/api/payment-keywords');
+        const data = await response.json();
+        const methods = data.methods || {};
+        
+        let modalHTML = `
+            <div class="modal" onclick="closeModal(event)">
+                <div class="modal-content large-modal" onclick="event.stopPropagation()">
+                    <div class="modal-header">
+                        <h2><i class="fas fa-credit-card"></i> Payment Keywords Management</h2>
+                        <button class="modal-close" onclick="closeModal()">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div style="margin-bottom: 20px; background: rgba(102, 126, 234, 0.1); padding: 15px; border-radius: 8px; border-left: 4px solid #667eea;">
+                            <p style="margin: 0; color: #aaa; font-size: 0.95rem;">
+                                <i class="fas fa-info-circle"></i> <strong>কীভাবে কাজ করে:</strong> ইউজার যখন কোন কীওয়ার্ড পাঠায়, বট সেই পেমেন্ট মেথডের নম্বর পাঠায়।
+                            </p>
+                        </div>
+                        
+                        <div style="display: grid; gap: 20px;">
+        `;
+        
+        Object.entries(methods).forEach(([methodName, config]) => {
+            const keywords = config.keywords || [];
+            const enabled = config.enabled !== false;
+            
+            modalHTML += `
+                <div style="background: rgba(255,255,255,0.05); padding: 20px; border-radius: 10px; border-left: 4px solid #667eea;">
+                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 15px;">
+                        <div>
+                            <h3 style="margin: 0 0 5px 0; color: #4facfe; font-size: 1.1rem;">${methodName}</h3>
+                            <p style="margin: 0; color: #aaa; font-size: 0.9rem;">
+                                <strong>${keywords.length}</strong> কীওয়ার্ড সেট করা আছে
+                            </p>
+                        </div>
+                        <div style="display: flex; gap: 8px;">
+                            <button onclick="editPaymentKeyword('${methodName}')" style="padding: 8px 15px; background: #667eea; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem;">
+                                <i class="fas fa-edit"></i> Edit
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div style="background: rgba(0,0,0,0.3); padding: 12px; border-radius: 6px; margin-bottom: 12px;">
+                        <strong style="color: #43e97b; font-size: 0.95rem;">📝 কীওয়ার্ড:</strong>
+                        <div style="margin-top: 8px; display: flex; flex-wrap: wrap; gap: 8px;">
+                            ${keywords.map(kw => `
+                                <span style="background: #667eea; color: white; padding: 5px 12px; border-radius: 20px; font-size: 0.85rem;">
+                                    ${kw}
+                                </span>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        
+        modalHTML += `
+                        </div>
+                        
+                        <div style="margin-top: 30px;">
+                            <h3><i class="fas fa-plus-circle"></i> নতুন পেমেন্ট মেথড যোগ করুন</h3>
+                            <div style="background: rgba(255,255,255,0.05); padding: 20px; border-radius: 10px; margin-top: 15px;">
+                                <div class="form-group">
+                                    <label>পেমেন্ট মেথড নাম:</label>
+                                    <input type="text" id="newMethodName" placeholder="e.g., Bkash, Nagad, Rocket" class="form-input" style="margin-bottom: 15px;">
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label>কীওয়ার্ড (কমা দিয়ে আলাদা করুন):</label>
+                                    <input type="text" id="newMethodKeywords" placeholder="e.g., bkash, বিকাশ, bk" class="form-input" style="margin-bottom: 15px;">
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label>রেসপন্স মেসেজ:</label>
+                                    <textarea id="newMethodResponse" placeholder="পেমেন্ট মেথড সিলেক্ট করলে এই মেসেজ পাঠানো হবে" class="form-input" style="resize: vertical; min-height: 80px; margin-bottom: 15px;"></textarea>
+                                </div>
+                                
+                                <button onclick="addPaymentKeywordMethod()" style="width: 100%; padding: 12px; background: #43e97b; color: #1a1a2e; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 1rem;">
+                                    <i class="fas fa-plus"></i> মেথড যোগ করুন
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.getElementById('modalContainer').innerHTML = modalHTML;
+    } catch (error) {
+        console.error('Error loading payment keywords:', error);
+        showToast('ডেটা লোড করতে ব্যর্থ', 'error');
+    }
+}
+
+async function editPaymentKeyword(methodName) {
+    try {
+        const response = await fetch('/api/payment-keywords');
+        const data = await response.json();
+        const config = data.methods[methodName];
+        
+        if (!config) {
+            showToast('মেথড খুঁজে পাওয়া যায়নি', 'error');
+            return;
+        }
+        
+        const keywords = config.keywords.join(', ');
+        const responseMsg = config.response || '';
+        
+        const modalHTML = `
+            <div class="modal" onclick="closeModal(event)">
+                <div class="modal-content" onclick="event.stopPropagation()">
+                    <div class="modal-header">
+                        <h2><i class="fas fa-edit"></i> ${methodName} এডিট করুন</h2>
+                        <button class="modal-close" onclick="closeModal()">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="form-group">
+                            <label>কীওয়ার্ড (কমা দিয়ে আলাদা করুন):</label>
+                            <input type="text" id="editKeywords" value="${keywords}" class="form-input">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>রেসপন্স মেসেজ:</label>
+                            <textarea id="editResponse" class="form-input" style="resize: vertical; min-height: 100px;">${responseMsg}</textarea>
+                        </div>
+                        
+                        <div style="background: rgba(67, 233, 123, 0.1); padding: 12px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #43e97b;">
+                            <p style="margin: 0; color: #aaa; font-size: 0.9rem;">
+                                <i class="fas fa-lightbulb"></i> ইউজার যখন এই কীওয়ার্ড গুলোর মধ্যে কোন একটি পাঠায়, বট এই মেসেজ এবং পেমেন্ট নম্বর পাঠাবে।
+                            </p>
+                        </div>
+                        
+                        <div class="button-group" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                            <button onclick="savePaymentKeyword('${methodName}')" class="btn-save">
+                                <i class="fas fa-save"></i> সংরক্ষণ করুন
+                            </button>
+                            <button onclick="deletePaymentKeywordMethod('${methodName}')" class="btn-delete">
+                                <i class="fas fa-trash"></i> মুছে ফেলুন
+                            </button>
+                        </div>
+                        
+                        <button onclick="closeModal()" class="btn-cancel" style="width: 100%; margin-top: 10px;">বাতিল</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.getElementById('modalContainer').innerHTML = modalHTML;
+    } catch (error) {
+        console.error('Error editing payment keyword:', error);
+        showToast('এডিট লোড করতে ব্যর্থ', 'error');
+    }
+}
+
+async function savePaymentKeyword(methodName) {
+    try {
+        const keywordsText = document.getElementById('editKeywords').value.trim();
+        const responseMsg = document.getElementById('editResponse').value.trim();
+        
+        if (!keywordsText || !responseMsg) {
+            showToast('সব ফিল্ড পূরণ করুন', 'warning');
+            return;
+        }
+        
+        const keywords = keywordsText.split(',').map(k => k.trim()).filter(k => k.length > 0);
+        
+        if (keywords.length === 0) {
+            showToast('কমপক্ষে একটি কীওয়ার্ড প্রয়োজন', 'warning');
+            return;
+        }
+        
+        const response = await fetch('/api/payment-keywords');
+        const data = await response.json();
+        const methods = data.methods || {};
+        
+        methods[methodName] = {
+            keywords,
+            response: responseMsg,
+            enabled: true
+        };
+        
+        const updateResponse = await fetch('/api/payment-keywords/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ methods })
+        });
+        
+        if (updateResponse.ok) {
+            showToast(`${methodName} আপডেট হয়েছে`, 'success');
+            closeModal();
+            showPaymentKeywordsModal();
+        } else {
+            showToast('আপডেট ব্যর্থ', 'error');
+        }
+    } catch (error) {
+        console.error('Error saving payment keyword:', error);
+        showToast('সংরক্ষণ করতে ব্যর্থ', 'error');
+    }
+}
+
+async function addPaymentKeywordMethod() {
+    try {
+        const methodName = document.getElementById('newMethodName').value.trim();
+        const keywordsText = document.getElementById('newMethodKeywords').value.trim();
+        const responseMsg = document.getElementById('newMethodResponse').value.trim();
+        
+        if (!methodName || !keywordsText || !responseMsg) {
+            showToast('সব ফিল্ড পূরণ করুন', 'warning');
+            return;
+        }
+        
+        const keywords = keywordsText.split(',').map(k => k.trim()).filter(k => k.length > 0);
+        
+        if (keywords.length === 0) {
+            showToast('কমপক্ষে একটি কীওয়ার্ড প্রয়োজন', 'warning');
+            return;
+        }
+        
+        const response = await fetch('/api/payment-keywords');
+        const data = await response.json();
+        const methods = data.methods || {};
+        
+        if (methods[methodName]) {
+            showToast('এই মেথড ইতিমধ্যে আছে', 'warning');
+            return;
+        }
+        
+        methods[methodName] = {
+            keywords,
+            response: responseMsg,
+            enabled: true
+        };
+        
+        const updateResponse = await fetch('/api/payment-keywords/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ methods })
+        });
+        
+        if (updateResponse.ok) {
+            showToast(`${methodName} যোগ করা হয়েছে`, 'success');
+            closeModal();
+            showPaymentKeywordsModal();
+        } else {
+            showToast('যোগ করা ব্যর্থ', 'error');
+        }
+    } catch (error) {
+        console.error('Error adding payment method:', error);
+        showToast('যোগ করতে ব্যর্থ', 'error');
+    }
+}
+
+async function deletePaymentKeywordMethod(methodName) {
+    if (!confirm(`${methodName} মেথড মুছে ফেলতে চান? এটি বাতিল করা যাবে না।`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/payment-keywords');
+        const data = await response.json();
+        const methods = data.methods || {};
+        
+        delete methods[methodName];
+        
+        const updateResponse = await fetch('/api/payment-keywords/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ methods })
+        });
+        
+        if (updateResponse.ok) {
+            showToast(`${methodName} মুছে ফেলা হয়েছে`, 'success');
+            closeModal();
+            showPaymentKeywordsModal();
+        } else {
+            showToast('মুছে ফেলা ব্যর্থ', 'error');
+        }
+    } catch (error) {
+        console.error('Error deleting payment method:', error);
+        showToast('মুছে ফেলতে ব্যর্থ', 'error');
+    }
 }
 
 // Edit Message Settings Modal

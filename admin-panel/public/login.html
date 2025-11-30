@@ -333,19 +333,19 @@
 
         <div class="info-box">
             <i class="fas fa-info-circle"></i>
-            একবার লগইন করলে লগআউট না করা পর্যন্ত লগআউট হবে না।
+            You will remain logged in until you explicitly log out.
         </div>
 
         <form id="loginForm" onsubmit="handleLogin(event)">
             <div class="form-group">
                 <label class="form-label" for="username">
-                    <i class="fas fa-user"></i> ইউজারনেম
+                    <i class="fas fa-user"></i> Username
                 </label>
                 <input 
                     type="text" 
                     id="username" 
                     class="form-input" 
-                    placeholder="আপনার ইউজারনেম প্রবেশ করুন"
+                    placeholder="Enter your username"
                     required
                     autocomplete="username"
                 >
@@ -353,13 +353,13 @@
 
             <div class="form-group">
                 <label class="form-label" for="password">
-                    <i class="fas fa-lock"></i> পাসওয়ার্ড
+                    <i class="fas fa-lock"></i> Password
                 </label>
                 <input 
                     type="password" 
                     id="password" 
                     class="form-input" 
-                    placeholder="আপনার পাসওয়ার্ড প্রবেশ করুন"
+                    placeholder="Enter your password"
                     required
                     autocomplete="current-password"
                 >
@@ -367,17 +367,17 @@
 
             <div class="remember-me">
                 <input type="checkbox" id="rememberMe" checked>
-                <label for="rememberMe">এই ডিভাইসে আমাকে মনে রাখুন</label>
+                <label for="rememberMe">Remember me on this device</label>
             </div>
 
             <button type="submit" class="login-btn" id="loginBtn">
                 <span class="loading-spinner" id="spinner"></span>
-                <span id="btnText"><i class="fas fa-sign-in-alt"></i> লগইন করুন</span>
+                <span id="btnText"><i class="fas fa-sign-in-alt"></i> Login</span>
             </button>
         </form>
 
         <div class="login-footer">
-            <p>🔒 আপনার তথ্য সম্পূর্ণ সুরক্ষিত এবং এনক্রিপ্টেড</p>
+            <p>🔒 Your information is completely secure and encrypted</p>
         </div>
     </div>
 
@@ -428,14 +428,14 @@
 
             // Validate inputs
             if (!username || !password) {
-                showError('ইউজারনেম এবং পাসওয়ার্ড উভয়ই প্রয়োজন');
+                showError('Username and password are required');
                 return;
             }
 
             // Disable button and show spinner
             loginBtn.disabled = true;
             spinner.classList.add('show');
-            btnText.textContent = 'লগইন হচ্ছে...';
+            btnText.textContent = 'Logging in...';
 
             try {
                 const response = await fetch('/api/admin/login', {
@@ -462,28 +462,28 @@
                     }
 
                     // Show success message
-                    showSuccess('লগইন সফল! আপনি পুনর্নির্দেশিত হচ্ছেন...');
+                    showSuccess('Login successful! Redirecting...');
 
                     // Redirect after short delay
                     setTimeout(() => {
                         window.location.href = '/';
                     }, 1000);
                 } else {
-                    showError(data.message || 'লগইন ব্যর্থ হয়েছে। ইউজারনেম এবং পাসওয়ার্ড পরীক্ষা করুন।');
+                    showError(data.message || 'Login failed. Please check your username and password.');
                     
                     // Re-enable button
                     loginBtn.disabled = false;
                     spinner.classList.remove('show');
-                    btnText.textContent = '<i class="fas fa-sign-in-alt"></i> লগইন করুন';
+                    btnText.textContent = '<i class="fas fa-sign-in-alt"></i> Login';
                 }
             } catch (error) {
                 console.error('Login error:', error);
-                showError('সার্ভারের সাথে সংযোগ ব্যর্থ। পরে চেষ্টা করুন।');
+                showError('Connection failed. Please try again later.');
                 
                 // Re-enable button
                 loginBtn.disabled = false;
                 spinner.classList.remove('show');
-                btnText.innerHTML = '<i class="fas fa-sign-in-alt"></i> লগইন করুন';
+                btnText.innerHTML = '<i class="fas fa-sign-in-alt"></i> Login';
             }
         }
 

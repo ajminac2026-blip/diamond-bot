@@ -140,6 +140,10 @@ app.post('/api/admin/change-password', requireAuth, async (req, res) => {
             return res.json({ success: false, message: 'Current password is incorrect' });
         }
         
+        if (!newPassword || newPassword.length < 4) {
+            return res.json({ success: false, message: 'New password must be at least 4 characters' });
+        }
+        
         credentials.password = newPassword;
         credentials.lastUpdated = new Date().toISOString();
         
@@ -149,6 +153,35 @@ app.post('/api/admin/change-password', requireAuth, async (req, res) => {
         await fs.appendFile(path.join(adminPath, 'admin-logs.txt'), logEntry);
         
         res.json({ success: true, message: 'Password changed successfully' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// Change username API
+app.post('/api/admin/change-username', requireAuth, async (req, res) => {
+    try {
+        const { currentPassword, newUsername } = req.body;
+        const credentials = await readJSON(adminCredentialsPath);
+        
+        if (currentPassword !== credentials.password) {
+            return res.json({ success: false, message: 'Current password is incorrect' });
+        }
+        
+        if (!newUsername || newUsername.length < 3) {
+            return res.json({ success: false, message: 'Username must be at least 3 characters' });
+        }
+        
+        const oldUsername = credentials.username;
+        credentials.username = newUsername;
+        credentials.lastUpdated = new Date().toISOString();
+        
+        await writeJSON(adminCredentialsPath, credentials);
+        
+        const logEntry = `[${new Date().toISOString()}] 👤 Admin username changed from '${oldUsername}' to '${newUsername}'\n`;
+        await fs.appendFile(path.join(adminPath, 'admin-logs.txt'), logEntry);
+        
+        res.json({ success: true, message: 'Username changed successfully' });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -1851,6 +1884,97 @@ app.post('/api/send-message-to-group', async (req, res) => {
             console.error(`❌ [SEND-MESSAGE] Error calling bot API:`, error.message);
             res.json({ success: false, error: error.message });
         }
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Command Management APIs
+
+app.get('/api/commands', async (req, res) => {
+    try {
+        const commands = await readJSON(commandsPath);
+        res.json(commands || { userCommands: [], adminCommands: [] });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.post('/api/commands/add', async (req, res) => {
+    try {
+        const { command, description, response, type } = req.body;
+        
+        if (!command || !type) {
+            return res.status(400).json({ success: false, error: 'Command and type required' });
+        }
+        
+        let commands = await readJSON(commandsPath);
+        if (!commands.userCommands) commands.userCommands = [];
+        if (!commands.adminCommands) commands.adminCommands = [];
+        
+        const newCommand = { command, description, response, type, createdAt: new Date().toISOString() };
+        
+        if (type === 'user') {
+            commands.userCommands.push(newCommand);
+        } else if (type === 'admin') {
+            commands.adminCommands.push(newCommand);
+        }
+        
+        await writeJSON(commandsPath, commands);
+        io.emit('commandAdded', newCommand);
+        res.json({ success: true, command: newCommand });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.post('/api/commands/update', async (req, res) => {
+    try {
+        const { index, type, command, description, response } = req.body;
+        
+        let commands = await readJSON(commandsPath);
+        if (!commands.userCommands) commands.userCommands = [];
+        if (!commands.adminCommands) commands.adminCommands = [];
+        
+        if (type === 'user' && index < commands.userCommands.length) {
+            commands.userCommands[index] = { 
+                command, description, response, type, 
+                createdAt: commands.userCommands[index].createdAt || new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            };
+        } else if (type === 'admin' && index < commands.adminCommands.length) {
+            commands.adminCommands[index] = { 
+                command, description, response, type, 
+                createdAt: commands.adminCommands[index].createdAt || new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            };
+        }
+        
+        await writeJSON(commandsPath, commands);
+        io.emit('commandUpdated', { index, type, command: commands[type === 'user' ? 'userCommands' : 'adminCommands'][index] });
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.post('/api/commands/delete', async (req, res) => {
+    try {
+        const { index, type } = req.body;
+        
+        let commands = await readJSON(commandsPath);
+        if (!commands.userCommands) commands.userCommands = [];
+        if (!commands.adminCommands) commands.adminCommands = [];
+        
+        if (type === 'user' && index < commands.userCommands.length) {
+            commands.userCommands.splice(index, 1);
+        } else if (type === 'admin' && index < commands.adminCommands.length) {
+            commands.adminCommands.splice(index, 1);
+        }
+        
+        await writeJSON(commandsPath, commands);
+        io.emit('commandDeleted', { index, type });
+        res.json({ success: true });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
