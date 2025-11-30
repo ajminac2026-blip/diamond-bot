@@ -5,11 +5,18 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
+# Install root dependencies
 RUN npm install --production
 
 # Copy application code
 COPY . .
+
+# Install admin panel dependencies
+WORKDIR /app/admin-panel
+RUN npm install --production
+
+# Go back to root
+WORKDIR /app
 
 # Create config directory if needed
 RUN mkdir -p config
