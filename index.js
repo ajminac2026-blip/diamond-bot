@@ -5,6 +5,8 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const io = require('socket.io-client');
+const fs = require('fs').promises;
+const path = require('path');
 const db = require('./config/database');
 const { showWhatsAppDashboard } = require('./handlers/dashboard');
 const { processPaymentReceipt } = require('./utils/payment-processor');
@@ -31,23 +33,7 @@ db.initializeUsers();
 db.initializeCleanup();
 
 const client = new Client({
-    authStrategy: new LocalAuth({ clientId: 'diamond-bot', dataPath: '/tmp/.wwebjs_auth' }),
-    puppeteer: {
-        headless: 'new',
-        executablePath: '/snap/bin/chromium',
-        args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-accelerated-2d-canvas',
-            '--no-first-run',
-            '--no-zygote',
-            '--disable-gpu',
-            '--disable-extensions',
-            '--disable-plugins',
-            '--disable-web-security'
-        ]
-    }
+    authStrategy: new LocalAuth()
 });
 
 let botIsReady = false; // Flag to track bot ready state
@@ -156,88 +142,95 @@ client.on('message', async (msg) => {
             }
         }
         
-        // Payment Number Command - Multiple shortcuts (English + Bangla)
-        const paymentKeywords = [
-            'payment', 'pay', 'number', 'num', 'নাম্বার', 'নম্বর',
-            'acc', 'account'
-        ];
+        // Payment Number Command - Load keywords dynamically from config
         const messageBody = msg.body.trim().toLowerCase();
         
-        // Check for specific payment method requests
-        const isBkashRequest = messageBody.includes('bkash') || messageBody.includes('bk') || messageBody.includes('বিকাশ');
-        const isNagadRequest = messageBody.includes('nagad') || messageBody.includes('ng') || messageBody.includes('নগদ');
-        const isRocketRequest = messageBody.includes('rocket') || messageBody.includes('রকেট') || messageBody.includes('রক');
-        const isBankRequest = messageBody.includes('bank') || messageBody.includes('bnk') || messageBody.includes('ব্যাংক') || messageBody.includes('ব্যাঙ্ক') || messageBody.includes('ac') || messageBody.includes('একাউন্ট');
-        
-        // Check if it's a general payment number request or specific method
-        if (paymentKeywords.some(keyword => messageBody.includes(keyword)) || isBkashRequest || isNagadRequest || isRocketRequest || isBankRequest) {
-            try {
-                const paymentConfig = require('./config/payment-number.json');
-                
-                let numbersText = '';
-                let responseMessage = '';
-                
-                // If specific method requested, show only that method
-                if (isBkashRequest) {
-                    const bkash = paymentConfig.paymentNumbers.find(m => m.method.toLowerCase() === 'bkash');
-                    if (bkash) {
-                        numbersText = `📱 *${bkash.method}* (${bkash.type})\n   📞 ${bkash.number}`;
-                        responseMessage = `💰 *Bkash Payment Number*\n\n${numbersText}\n\n✅ পেমেন্ট করার পর স্ক্রিনশট পাঠান।`;
-                    }
-                } else if (isNagadRequest) {
-                    const nagad = paymentConfig.paymentNumbers.find(m => m.method.toLowerCase() === 'nagad');
-                    if (nagad) {
-                        numbersText = `📱 *${nagad.method}* (${nagad.type})\n   📞 ${nagad.number}`;
-                        responseMessage = `💰 *Nagad Payment Number*\n\n${numbersText}\n\n✅ পেমেন্ট করার পর স্ক্রিনশট পাঠান।`;
-                    }
-                } else if (isRocketRequest) {
-                    const rocket = paymentConfig.paymentNumbers.find(m => m.method.toLowerCase() === 'rocket');
-                    if (rocket) {
-                        numbersText = `📱 *${rocket.method}* (${rocket.type})\n   📞 ${rocket.number}`;
-                        responseMessage = `💰 *Rocket Payment Number*\n\n${numbersText}\n\n✅ পেমেন্ট করার পর স্ক্রিনশট পাঠান।`;
-                    }
-                } else if (isBankRequest) {
-                    const bank = paymentConfig.paymentNumbers.find(m => m.method.toLowerCase().includes('bank') || m.isBank);
-                    if (bank) {
-                        if (bank.isBank) {
+        try {
+            const paymentKeywordsPath = path.join(__dirname, 'config', 'payment-keywords.json');
+            const paymentKeywordsData = await fs.readFile(paymentKeywordsPath, 'utf8');
+            const paymentKeywordsConfig = JSON.parse(paymentKeywordsData);
+            
+            // Check which payment method matches
+            let matchedMethod = null;
+            let matchedKeyword = null;
+            
+            for (const [methodName, methodConfig] of Object.entries(paymentKeywordsConfig.methods)) {
+                const keyword = methodConfig.keywords.find(kw => messageBody.includes(kw.toLowerCase()));
+                if (keyword) {
+                    matchedMethod = methodName;
+                    matchedKeyword = keyword;
+                    break;
+                }
+            }
+            
+            if (matchedMethod) {
+                try {
+                    // Load payment numbers fresh (no cache)
+                    const paymentNumberPath = path.join(__dirname, 'config', 'payment-number.json');
+                    const paymentNumberData = await fs.readFile(paymentNumberPath, 'utf8');
+                    const paymentConfig = JSON.parse(paymentNumberData);
+                    
+                    const methodConfig = paymentKeywordsConfig.methods[matchedMethod];
+                    
+                    let numbersText = '';
+                    
+                    if (matchedMethod === 'bkash') {
+                        const bkash = paymentConfig.paymentNumbers.find(m => m.method.toLowerCase() === 'bkash');
+                        if (bkash) {
+                            numbersText = `📱 *${bkash.method}* (${bkash.type})\n📞 ${bkash.number}`;
+                        }
+                    } else if (matchedMethod === 'nagad') {
+                        const nagad = paymentConfig.paymentNumbers.find(m => m.method.toLowerCase() === 'nagad');
+                        if (nagad) {
+                            numbersText = `📱 *${nagad.method}* (${nagad.type})\n📞 ${nagad.number}`;
+                        }
+                    } else if (matchedMethod === 'rocket') {
+                        const rocket = paymentConfig.paymentNumbers.find(m => m.method.toLowerCase() === 'rocket');
+                        if (rocket) {
+                            numbersText = `📱 *${rocket.method}* (${rocket.type})\n📞 ${rocket.number}`;
+                        }
+                    } else if (matchedMethod === 'bank') {
+                        const bank = paymentConfig.paymentNumbers.find(m => m.method.toLowerCase().includes('bank') || m.isBank);
+                        if (bank && bank.isBank) {
                             numbersText = `🏦 *${bank.method}*\n`;
                             numbersText += `👤 *Account Name:* ${bank.accountName || 'N/A'}\n`;
                             numbersText += `🏢 *Branch:* ${bank.branch || 'N/A'}\n`;
                             numbersText += `🔢 *Account Number:* ${bank.accountNumber || bank.number}\n`;
                             numbersText += `📋 *Type:* ${bank.type}`;
-                            responseMessage = `💰 *Bank Payment Information*\n\n${numbersText}\n\n✅ পেমেন্ট করার পর স্ক্রিনশট পাঠান।`;
-                        } else {
-                            numbersText = `🏦 *${bank.method}* (${bank.type})\n   📞 ${bank.number}`;
-                            responseMessage = `💰 *Bank Payment Number*\n\n${numbersText}\n\n✅ পেমেন্ট করার পর স্ক্রিনশট পাঠান।`;
                         }
+                    } else if (matchedMethod === 'all') {
+                        // Show all payment methods
+                        paymentConfig.paymentNumbers.forEach((method, index) => {
+                            if (method.isBank) {
+                                numbersText += `${index + 1}. 🏦 *${method.method}*\n`;
+                                numbersText += `   👤 ${method.accountName || 'N/A'}\n`;
+                                numbersText += `   🏢 ${method.branch || 'N/A'}\n`;
+                                numbersText += `   🔢 ${method.accountNumber || method.number}\n`;
+                                numbersText += `   📋 ${method.type}\n\n`;
+                            } else {
+                                numbersText += `${index + 1}. *${method.method}* (${method.type})\n   📞 ${method.number}\n\n`;
+                            }
+                        });
                     }
-                } else {
-                    // Show all payment methods
-                    paymentConfig.paymentNumbers.forEach((method, index) => {
-                        if (method.isBank) {
-                            numbersText += `${index + 1}. 🏦 *${method.method}*\n`;
-                            numbersText += `   👤 ${method.accountName || 'N/A'}\n`;
-                            numbersText += `   🏢 ${method.branch || 'N/A'}\n`;
-                            numbersText += `   🔢 ${method.accountNumber || method.number}\n`;
-                            numbersText += `   📋 ${method.type}\n\n`;
-                        } else {
-                            numbersText += `${index + 1}. *${method.method}* (${method.type})\n   📞 ${method.number}\n\n`;
-                        }
-                    });
-                    responseMessage = paymentConfig.message.replace('{numbers}', numbersText);
-                }
-                
-                if (responseMessage) {
+                    
+                    if (!numbersText) {
+                        await msg.reply('❌ Payment method not available. Please contact admin.');
+                        return;
+                    }
+                    
+                    // Use custom response template with {paymentNumbers} placeholder
+                    const responseMessage = methodConfig.response.replace('{paymentNumbers}', numbersText);
+                    
                     await msg.reply(responseMessage);
-                    console.log(`[PAYMENT-INFO] Sent payment numbers to ${fromUserId} (keyword: ${messageBody})`);
-                } else {
-                    await msg.reply('❌ Payment method not available. Please contact admin.');
+                    console.log(`[PAYMENT-INFO] Sent ${matchedMethod} payment info to ${fromUserId} (keyword: ${matchedKeyword})`);
+                } catch (error) {
+                    console.error('[PAYMENT-INFO ERROR]', error);
+                    await msg.reply('❌ Payment information not available. Please contact admin.');
                 }
-            } catch (error) {
-                console.error('[PAYMENT-INFO ERROR]', error);
-                await msg.reply('❌ Payment information not available. Please contact admin.');
+                return;
             }
-            return;
+        } catch (keywordError) {
+            console.error('[PAYMENT-KEYWORDS LOAD ERROR]', keywordError);
         }
         
         // Dashboard command: /d
@@ -320,10 +313,12 @@ client.on('message', async (msg) => {
                 let userName = fromUserId;
                 try {
                     const contact = await client.getContactById(fromUserId);
-                    userName = contact.pushname || contact.name || fromUserId;
+                    console.log('[MULTI-LINE] Contact info:', { pushname: contact.pushname, name: contact.name, notifyName: msg._data?.notifyName });
+                    userName = contact.pushname || contact.name || msg._data?.notifyName || fromUserId;
                 } catch (contactErr) {
                     console.log('[MULTI-LINE] Could not fetch contact, using fallback name');
-                    userName = msg.from?.contact?.pushname || fromUserId;
+                    console.log('[MULTI-LINE] Available fields:', { notifyName: msg._data?.notifyName, author: msg.author });
+                    userName = msg._data?.notifyName || msg.author || fromUserId;
                 }
                 console.log(`[MULTI-LINE] Processing for user: ${userName}`);
                 console.log(`[MULTI-LINE] Calling handleMultiLineDiamondRequest...\n`);
@@ -342,10 +337,12 @@ client.on('message', async (msg) => {
             let userName = fromUserId;
             try {
                 const contact = await client.getContactById(fromUserId);
-                userName = contact.pushname || contact.name || fromUserId;
+                console.log('[DIAMOND] Contact info:', { pushname: contact.pushname, name: contact.name, notifyName: msg._data?.notifyName });
+                userName = contact.pushname || contact.name || msg._data?.notifyName || fromUserId;
             } catch (contactErr) {
                 console.log('[DIAMOND] Could not fetch contact, using fallback name');
-                userName = msg.from?.contact?.pushname || fromUserId;
+                console.log('[DIAMOND] Available fields:', { notifyName: msg._data?.notifyName, author: msg.author });
+                userName = msg._data?.notifyName || msg.author || fromUserId;
             }
             
             // Check if it's a group (diamond order) or direct message (deposit)
@@ -609,6 +606,51 @@ client.on('message', async (msg) => {
             return;
         }
         
+        // Dynamic Commands from commands.json
+        if (msg.body.trim().startsWith('/')) {
+            try {
+                const commandsData = JSON.parse(await fs.readFile(path.join(__dirname, 'config', 'commands.json'), 'utf8'));
+                const userCommand = msg.body.trim().toLowerCase();
+                
+                // Search through all categories
+                for (const category of Object.keys(commandsData)) {
+                    const matchedCmd = commandsData[category].find(cmd => 
+                        cmd.command.toLowerCase() === userCommand && cmd.enabled
+                    );
+                    
+                    if (matchedCmd) {
+                        // Check category permissions
+                        if (matchedCmd.category === 'admin' && !isAdminUser) {
+                            await msg.reply('❌ This is an admin-only command.');
+                            return;
+                        }
+                        
+                        // Handle dynamic responses
+                        if (matchedCmd.response === 'dynamic') {
+                            // Skip - handled by existing code
+                            break;
+                        }
+                        
+                        // Replace placeholders in response
+                        let response = matchedCmd.response;
+                        
+                        // Get group rate if available
+                        if (isGroup) {
+                            const groupData = db.getGroupData(groupId);
+                            if (groupData && groupData.rate) {
+                                response = response.replace('{rate}', groupData.rate);
+                            }
+                        }
+                        
+                        await msg.reply(response);
+                        return;
+                    }
+                }
+            } catch (cmdError) {
+                console.log('[COMMANDS] Error loading commands.json:', cmdError.message);
+            }
+        }
+        
         // Help command
         if (msg.body.trim() === '/help') {
             const helpText = `*🤖 DIAMOND BOT COMMANDS*\n\n` +
@@ -752,6 +794,117 @@ client.on('message_revoke', async (after, before) => {
         
     } catch (error) {
         console.error('[DELETE EVENT] Error handling message revoke:', error.message);
+    }
+});
+
+// Handle message edit - when admin edits their approval message
+client.on('message_edit', async (msg, newBody, prevBody) => {
+    try {
+        console.log(`[EDIT EVENT] Message edited! Prev: "${prevBody}", New: "${newBody}"`);
+        console.log(`[EDIT EVENT] From: ${msg.from}, Author: ${msg.author}`);
+        
+        const fromUserId = msg.from;
+        const isGroup = fromUserId && fromUserId.includes('@g.us');
+        
+        if (!isGroup) {
+            console.log('[EDIT EVENT] Not a group message, ignoring');
+            return;
+        }
+        
+        // Check if this is admin user
+        const admins = db.getAdmins();
+        console.log('[EDIT EVENT] Admins:', admins);
+        console.log('[EDIT EVENT] Message author:', msg.author);
+        
+        // Check if author whatsappId matches any admin
+        const isAdmin = admins.some(admin => admin.whatsappId === msg.author);
+        
+        if (!isAdmin) {
+            console.log('[EDIT EVENT] Not an admin, ignoring');
+            return;
+        }
+        
+        console.log('[EDIT EVENT] ✅ Admin confirmed!');
+        
+        // Check if previous message was approval (done, ok, etc.)
+        const approvalKeywords = ['done', 'ok', 'do', 'dn', 'yes', 'অক', 'okey', 'ওকে'];
+        const wasPreviouslyApproval = approvalKeywords.some(keyword => 
+            prevBody.toLowerCase().trim() === keyword
+        );
+        
+        if (!wasPreviouslyApproval) return;
+        
+        console.log('[EDIT EVENT] Admin edited an approval message!');
+        
+        // Find the approved order that was just approved by this message
+        const database = db.loadDatabase();
+        const groupData = database.groups[fromUserId];
+        
+        if (!groupData || !groupData.entries) return;
+        
+        // Find recently approved entry (within last 2 minutes)
+        const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+        const recentApproval = groupData.entries.find(entry => 
+            entry.status === 'approved' && 
+            entry.approvedAt && 
+            entry.approvedAt > twoMinutesAgo
+        );
+        
+        if (recentApproval) {
+            console.log('[EDIT EVENT] Found recently approved order:', recentApproval.diamonds);
+            
+            // Change status to pending again and add edit note
+            recentApproval.status = 'pending';
+            recentApproval.editedAt = new Date().toISOString();
+            recentApproval.editReason = 'admin-edited-approval';
+            delete recentApproval.approvedAt;
+            
+            db.saveDatabase(database);
+            
+            // Get custom edit message from diamond-status or use default
+            let userMessage = `❌ আপনার অর্ডার ইনফো ভুল ছিল।\n\n` +
+                `দয়া করে আপনার নাম্বার সঠিক করে আবার অর্ডার দিন।\n\n` +
+                `⚠️ এই অর্ডার আর প্রসেস করা হবে না।\n\n` +
+                `📝 নতুন করে সঠিক তথ্য দিয়ে অর্ডার করুন।`;
+            
+            try {
+                const statusResponse = await fetch('http://localhost:3000/api/diamond-status');
+                const status = await statusResponse.json();
+                if (status.editMessage && status.editMessage.trim()) {
+                    userMessage = status.editMessage;
+                }
+            } catch (fetchErr) {
+                console.log('[EDIT EVENT] Using default message');
+            }
+            
+            try {
+                const chat = await client.getChatById(fromUserId);
+                await chat.sendMessage(userMessage);
+                console.log('[EDIT EVENT] Sent error message to group');
+            } catch (msgError) {
+                console.error('[EDIT EVENT] Failed to send message:', msgError.message);
+            }
+            
+            // Notify admin panel
+            try {
+                await fetch('http://localhost:3000/api/order-event', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        type: 'order-reverted',
+                        reason: 'admin-edited-approval',
+                        groupId: fromUserId,
+                        entry: recentApproval,
+                        message: `⚠️ অর্ডার ${recentApproval.diamonds}💎 এডমিন এডিট করেছে - pending এ ফিরে গেছে`
+                    })
+                }).catch(e => console.log('[EDIT EVENT] Admin panel notification failed'));
+            } catch (notifyError) {
+                console.log('[EDIT EVENT] Admin panel notify failed:', notifyError.message);
+            }
+        }
+        
+    } catch (error) {
+        console.error('[EDIT EVENT] Error handling message edit:', error.message);
     }
 });
 

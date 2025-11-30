@@ -8,10 +8,9 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="/socket.io/socket.io.js"></script>
     <script>
-        // Check authentication before loading the page
-        const token = localStorage.getItem('adminToken') || sessionStorage.getItem('adminToken');
-        if (!token) {
-            window.location.href = '/login.html';
+        // Check authentication on page load
+        if (!localStorage.getItem('adminLoggedIn') && !sessionStorage.getItem('adminLoggedIn')) {
+            window.location.href = '/login';
         }
     </script>
 </head>
@@ -388,6 +387,18 @@
                 <div class="menu-item" onclick="showApproveMessageModal()" id="approveMessageMenu">
                     <i class="fas fa-bell"></i>
                     <span>Approve Messages</span>
+                </div>
+                <div class="menu-item" onclick="showEditMessageModal()">
+                    <i class="fas fa-edit"></i>
+                    <span>Edit Message Settings</span>
+                </div>
+                <div class="menu-item" onclick="showCommandsModal()">
+                    <i class="fas fa-terminal"></i>
+                    <span>Command Management</span>
+                </div>
+                <div class="menu-item" onclick="event.preventDefault(); event.stopPropagation(); showPaymentKeywordsModal();">
+                    <i class="fas fa-credit-card"></i>
+                    <span>Payment Keywords</span>
                 </div>
                 <div class="menu-item" onclick="exportAllData()">
                     <i class="fas fa-file-export"></i>

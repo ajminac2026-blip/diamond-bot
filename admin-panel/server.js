@@ -1,4 +1,4 @@
-https://diamond-bot-USERNAME.replit.appconst express = require('express');
+const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
 const path = require('path');
@@ -12,6 +12,29 @@ const PORT = process.env.ADMIN_PORT || 3000;
 
 // Middleware
 app.use(express.json());
+
+// Authentication middleware
+function requireAuth(req, res, next) {
+    const token = req.headers['authorization'];
+    
+    if (!token || !activeSessions.has(token)) {
+        return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+    
+    next();
+}
+
+// Serve login page
+app.get('/login', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
+
+// Serve main page only if authenticated
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// Static files
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Database paths
@@ -21,10 +44,16 @@ const paymentsPath = path.join(dbPath, 'payments.json');
 const transactionsPath = path.join(dbPath, 'payment-transactions.json');
 const databasePath = path.join(dbPath, 'database.json');
 const adminsPath = path.join(dbPath, 'admins.json');
+const commandsPath = path.join(dbPath, 'commands.json');
+const paymentKeywordsPath = path.join(dbPath, 'payment-keywords.json');
+const adminCredentialsPath = path.join(dbPath, 'admin-credentials.json');
 
 // Admin panel specific paths
 const adminPath = path.join(__dirname);
 const autoDeductionsPath = path.join(adminPath, 'auto-deductions.json');
+
+// Active sessions
+const activeSessions = new Set();
 
 // Helper functions to read data
 async function readJSON(filePath) {
@@ -40,61 +69,78 @@ async function writeJSON(filePath, data) {
     await fs.writeFile(filePath, JSON.stringify(data, null, 2));
 }
 
-// Middleware for authentication
-function verifyToken(req, res, next) {
-    const token = req.headers.authorization?.split(' ')[1];
-    
-    if (!token) {
-        return res.status(401).json({ success: false, error: 'No token provided' });
-    }
-    
-    // For simplicity, using a basic token check. In production, use JWT
-    if (token !== 'admin-token-secret-key') {
-        return res.status(401).json({ success: false, error: 'Invalid token' });
-    }
-    
-    next();
+// Generate random token
+function generateToken() {
+    return 'admin_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
 }
 
 // API Routes
 
-// Login Endpoint
-app.post('/api/login', async (req, res) => {
+// Login API
+app.post('/api/admin/login', async (req, res) => {
     try {
-        const { username, password } = req.body;
+        const { username, password, rememberMe } = req.body;
+        const credentials = await readJSON(adminCredentialsPath);
         
-        if (!username || !password) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'Username and password are required' 
-            });
-        }
-        
-        // Simple authentication - in production, use proper JWT and bcrypt
-        if (username === 'admin' && password === 'Rubel890') {
-            const token = 'admin-token-secret-key';
+        if (username === credentials.username && password === credentials.password) {
+            const token = generateToken();
+            activeSessions.add(token);
+            
+            const logEntry = `[${new Date().toISOString()}] 🔐 Admin logged in\n`;
+            await fs.appendFile(path.join(adminPath, 'admin-logs.txt'), logEntry);
+            
             res.json({ 
                 success: true, 
-                token: token,
+                token,
                 message: 'Login successful' 
             });
         } else {
-            res.status(401).json({ 
+            res.json({ 
                 success: false, 
-                message: 'Invalid credentials' 
+                message: 'Invalid username or password' 
             });
         }
     } catch (error) {
-        res.status(500).json({ 
-            success: false, 
-            error: error.message 
-        });
+        res.status(500).json({ success: false, message: error.message });
     }
 });
 
-// Verify Token Endpoint
-app.get('/api/verify-token', verifyToken, (req, res) => {
-    res.json({ success: true, message: 'Token is valid' });
+// Logout API
+app.post('/api/admin/logout', (req, res) => {
+    try {
+        const token = req.headers['authorization'];
+        if (token) {
+            activeSessions.delete(token);
+        }
+        
+        res.json({ success: true, message: 'Logged out successfully' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// Change password API
+app.post('/api/admin/change-password', requireAuth, async (req, res) => {
+    try {
+        const { currentPassword, newPassword } = req.body;
+        const credentials = await readJSON(adminCredentialsPath);
+        
+        if (currentPassword !== credentials.password) {
+            return res.json({ success: false, message: 'Current password is incorrect' });
+        }
+        
+        credentials.password = newPassword;
+        credentials.lastUpdated = new Date().toISOString();
+        
+        await writeJSON(adminCredentialsPath, credentials);
+        
+        const logEntry = `[${new Date().toISOString()}] 🔑 Admin password changed\n`;
+        await fs.appendFile(path.join(adminPath, 'admin-logs.txt'), logEntry);
+        
+        res.json({ success: true, message: 'Password changed successfully' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
 });
 
 // Dashboard Stats
@@ -773,7 +819,7 @@ app.get('/api/orders', async (req, res) => {
             entries.forEach(entry => {
                 ordersArray.push({
                     id: entry.id,
-                    phone: entry.userId || 'Unknown',
+                    phone: entry.userName || entry.userId || 'Unknown',
                     playerIdType: 'Free Fire',
                     playerId: entry.playerIdNumber || entry.userId || '',
                     amount: Math.round(entry.diamonds * entry.rate),
@@ -1513,6 +1559,197 @@ app.post('/api/diamond-status/set-stock', async (req, res) => {
     }
 });
 
+// Edit Message Settings
+app.post('/api/diamond-status/edit-message', async (req, res) => {
+    try {
+        const { editMessage } = req.body;
+        
+        if (!editMessage || typeof editMessage !== 'string') {
+            return res.status(400).json({ success: false, error: 'Invalid message' });
+        }
+
+        let status = await readJSON(diamondStatusPath);
+        status.editMessage = editMessage;
+        status.lastEditMessageUpdate = new Date().toISOString();
+        await writeJSON(diamondStatusPath, status);
+        
+        // Log the action
+        const logEntry = `[${new Date().toISOString()}] ✏️ Edit message updated\n`;
+        await fs.appendFile(path.join(adminPath, 'admin-logs.txt'), logEntry);
+        
+        io.emit('diamondStatusChanged', status);
+        res.json({ success: true, status });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Commands Management APIs
+app.get('/api/commands', async (req, res) => {
+    try {
+        const commands = await readJSON(commandsPath);
+        res.json(commands);
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.post('/api/commands/add', async (req, res) => {
+    try {
+        const { command, response, description, category } = req.body;
+        
+        if (!command || !response || !category) {
+            return res.status(400).json({ success: false, error: 'Missing required fields' });
+        }
+        
+        let commands = await readJSON(commandsPath);
+        
+        // Find highest ID
+        let maxId = 0;
+        Object.values(commands).forEach(catCommands => {
+            catCommands.forEach(cmd => {
+                if (cmd.id > maxId) maxId = cmd.id;
+            });
+        });
+        
+        const newCommand = {
+            id: maxId + 1,
+            command: command.trim(),
+            response: response.trim(),
+            description: description.trim(),
+            enabled: true,
+            category: category
+        };
+        
+        if (!commands[category]) {
+            commands[category] = [];
+        }
+        
+        commands[category].push(newCommand);
+        await writeJSON(commandsPath, commands);
+        
+        const logEntry = `[${new Date().toISOString()}] 🆕 New command added: ${command} (${category})\n`;
+        await fs.appendFile(path.join(adminPath, 'admin-logs.txt'), logEntry);
+        
+        io.emit('commandsUpdated', commands);
+        res.json({ success: true, command: newCommand });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.post('/api/commands/update', async (req, res) => {
+    try {
+        const { id, command, response, description, enabled, category } = req.body;
+        
+        let commands = await readJSON(commandsPath);
+        let found = false;
+        
+        Object.keys(commands).forEach(cat => {
+            commands[cat] = commands[cat].map(cmd => {
+                if (cmd.id === id) {
+                    found = true;
+                    return { ...cmd, command, response, description, enabled, category };
+                }
+                return cmd;
+            });
+        });
+        
+        if (!found) {
+            return res.status(404).json({ success: false, error: 'Command not found' });
+        }
+        
+        await writeJSON(commandsPath, commands);
+        
+        const logEntry = `[${new Date().toISOString()}] ✏️ Command updated: ${command}\n`;
+        await fs.appendFile(path.join(adminPath, 'admin-logs.txt'), logEntry);
+        
+        io.emit('commandsUpdated', commands);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.post('/api/commands/delete', async (req, res) => {
+    try {
+        const { id } = req.body;
+        
+        let commands = await readJSON(commandsPath);
+        let deletedCommand = null;
+        
+        Object.keys(commands).forEach(cat => {
+            commands[cat] = commands[cat].filter(cmd => {
+                if (cmd.id === id) {
+                    deletedCommand = cmd;
+                    return false;
+                }
+                return true;
+            });
+        });
+        
+        if (!deletedCommand) {
+            return res.status(404).json({ success: false, error: 'Command not found' });
+        }
+        
+        await writeJSON(commandsPath, commands);
+        
+        const logEntry = `[${new Date().toISOString()}] 🗑️ Command deleted: ${deletedCommand.command}\n`;
+        await fs.appendFile(path.join(adminPath, 'admin-logs.txt'), logEntry);
+        
+        io.emit('commandsUpdated', commands);
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Payment Keywords Management
+app.get('/api/payment-keywords', async (req, res) => {
+    try {
+        const data = await readJSON(paymentKeywordsPath);
+        res.json(data);
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.post('/api/payment-keywords/update', async (req, res) => {
+    try {
+        const { methods } = req.body;
+        
+        if (!methods || typeof methods !== 'object') {
+            return res.status(400).json({ success: false, error: 'Invalid data' });
+        }
+        
+        // Validate each method
+        for (const [methodName, methodConfig] of Object.entries(methods)) {
+            if (!methodConfig.keywords || !Array.isArray(methodConfig.keywords) || methodConfig.keywords.length === 0) {
+                return res.status(400).json({ success: false, error: `Method ${methodName} must have at least one keyword` });
+            }
+            if (!methodConfig.response || !methodConfig.response.trim()) {
+                return res.status(400).json({ success: false, error: `Method ${methodName} must have a response message` });
+            }
+        }
+        
+        const data = {
+            methods,
+            lastUpdated: new Date().toISOString()
+        };
+        
+        await writeJSON(paymentKeywordsPath, data);
+        
+        const totalKeywords = Object.values(methods).reduce((sum, m) => sum + m.keywords.length, 0);
+        const logEntry = `[${new Date().toISOString()}] 💳 Payment keywords updated (${totalKeywords} total keywords)\n`;
+        await fs.appendFile(path.join(adminPath, 'admin-logs.txt'), logEntry);
+        
+        io.emit('paymentKeywordsUpdated', data);
+        res.json({ success: true, data });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 // Socket.IO real-time updates
 io.on('connection', (socket) => {
     console.log('Admin connected:', socket.id);
@@ -1523,29 +1760,16 @@ io.on('connection', (socket) => {
 });
 
 // Watch for file changes and emit updates
-try {
-    const chokidar = require('chokidar');
-    const watcher = chokidar.watch([usersPath, transactionsPath, databasePath], {
-        persistent: true,
-        ignoreInitial: true
-    });
+const chokidar = require('chokidar');
+const watcher = chokidar.watch([usersPath, transactionsPath, databasePath], {
+    persistent: true,
+    ignoreInitial: true
+});
 
-    watcher.on('change', (path) => {
-        console.log(`File ${path} changed, emitting update...`);
-        io.emit('dataUpdated', { timestamp: Date.now() });
-    });
-} catch (error) {
-    // Fallback to fs.watch if chokidar is not available
-    console.log('⚠️ Using fs.watch for file monitoring (chokidar not available)');
-    [usersPath, transactionsPath, databasePath].forEach(filePath => {
-        fs.watch(filePath, (eventType) => {
-            if (eventType === 'change') {
-                console.log(`File ${filePath} changed, emitting update...`);
-                io.emit('dataUpdated', { timestamp: Date.now() });
-            }
-        });
-    });
-}
+watcher.on('change', (path) => {
+    console.log(`File ${path} changed, emitting update...`);
+    io.emit('dataUpdated', { timestamp: Date.now() });
+});
 
 // Serve main HTML
 app.get('/', (req, res) => {
