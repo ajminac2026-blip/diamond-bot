@@ -33,7 +33,7 @@ db.initializeCleanup();
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
-        headless: true,
+        headless: 'new',
         executablePath: '/snap/bin/chromium',
         args: [
             '--no-sandbox',
@@ -42,7 +42,10 @@ const client = new Client({
             '--disable-accelerated-2d-canvas',
             '--no-first-run',
             '--no-zygote',
-            '--disable-gpu'
+            '--disable-gpu',
+            '--disable-extensions',
+            '--disable-plugins',
+            '--disable-web-security'
         ]
     }
 });
