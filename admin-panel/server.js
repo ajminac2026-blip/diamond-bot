@@ -1804,6 +1804,41 @@ watcher.on('change', (path) => {
     io.emit('dataUpdated', { timestamp: Date.now() });
 });
 
+// Send message to group endpoint
+app.post('/api/send-message-to-group', async (req, res) => {
+    try {
+        const { groupId, message } = req.body;
+        
+        if (!groupId || !message) {
+            return res.status(400).json({ success: false, error: 'groupId and message required' });
+        }
+        
+        console.log(`[SEND-MESSAGE] Sending to group ${groupId}: ${message.substring(0, 50)}...`);
+        
+        // Send via bot API
+        try {
+            const response = await fetch('http://localhost:3003/api/bot-send-message', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ groupId, message })
+            });
+            
+            if (response.ok) {
+                console.log(`✅ [SEND-MESSAGE] Successfully sent to ${groupId}`);
+                res.json({ success: true, message: 'Message sent to group' });
+            } else {
+                console.error(`❌ [SEND-MESSAGE] Bot API returned error`);
+                res.json({ success: false, error: 'Bot API error' });
+            }
+        } catch (error) {
+            console.error(`❌ [SEND-MESSAGE] Error calling bot API:`, error.message);
+            res.json({ success: false, error: error.message });
+        }
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 // Serve main HTML
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));

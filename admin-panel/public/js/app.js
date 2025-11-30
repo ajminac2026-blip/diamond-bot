@@ -518,6 +518,18 @@ async function saveGroupMessage(groupId) {
         });
         
         if (response.ok) {
+            // Send message to group via bot API
+            try {
+                await fetch('/api/send-message-to-group', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ groupId, message })
+                });
+                console.log('✅ Message sent to group');
+            } catch (err) {
+                console.error('❌ Failed to send message to group:', err);
+            }
+            
             await loadDiamondStatus();
             closeModal();
             showToast('Group message updated and sent', 'success');
