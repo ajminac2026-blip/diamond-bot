@@ -1531,8 +1531,8 @@ async function broadcastMessageToGroup(groupId, status) {
     try {
         const message = getGroupStatusMessage(groupId, status);
         
-        // Send via HTTP request to bot
-        const response = await fetch('http://localhost:3001/api/send-group-message', {
+        // Send via HTTP request to bot API (port 3003)
+        const response = await fetch('http://localhost:3003/api/bot-send-message', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
