@@ -1,12 +1,12 @@
 { pkgs }: {
   deps = [
-    pkgs.nodejs-20_x
-    pkgs.nodePackages.npm
+    pkgs.nodejs_20
     pkgs.chromium
     pkgs.gtk3
     pkgs.glib
     pkgs.nss
     pkgs.nspr
+    pkgs.atk
     pkgs.at-spi2-atk
     pkgs.cups
     pkgs.dbus
@@ -23,5 +23,10 @@
     pkgs.mesa
     pkgs.expat
     pkgs.alsa-lib
+    pkgs.libgbm
   ];
+  env = {
+    PUPPETEER_SKIP_CHROMIUM_DOWNLOAD = "true";
+    PUPPETEER_EXECUTABLE_PATH = "${pkgs.chromium}/bin/chromium";
+  };
 }
