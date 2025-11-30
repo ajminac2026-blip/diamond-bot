@@ -1421,10 +1421,20 @@ app.get('/api/diamond-status', async (req, res) => {
 
 app.post('/api/diamond-status/toggle', async (req, res) => {
     try {
+        const { systemStatus, pin } = req.body;
+        
+        // Validate PIN
+        const pinData = await readJSON(pinPath);
+        if (pin !== pinData.adminPin) {
+            return res.status(401).json({ success: false, message: 'Invalid PIN' });
+        }
+        
         let status = await readJSON(diamondStatusPath);
-        status.systemStatus = req.body.systemStatus;
+        status.systemStatus = systemStatus;
         status.lastToggled = new Date().toISOString();
         await writeJSON(diamondStatusPath, status);
+        
+        console.log(`[TOGGLE] Diamond system toggled to ${systemStatus}`);
         
         // Broadcast to WhatsApp groups
         try {
