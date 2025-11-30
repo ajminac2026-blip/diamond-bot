@@ -1144,7 +1144,7 @@ app.get('/api/bot-profile-photo/:userId', async (req, res) => {
     }
 });
 
-const BOT_API_PORT = process.env.BOT_API_PORT || 3001;
+const BOT_API_PORT = process.env.BOT_API_PORT || 3002;
 app.listen(BOT_API_PORT, () => {
     console.log(`\n✅ 🔌 Bot API Server running on http://localhost:${BOT_API_PORT}`);
     console.log(`📨 Message endpoint: POST http://localhost:${BOT_API_PORT}/api/bot-send-message`);
