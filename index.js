@@ -31,7 +31,7 @@ db.initializeUsers();
 db.initializeCleanup();
 
 const client = new Client({
-    authStrategy: new LocalAuth(),
+    authStrategy: new LocalAuth({ clientId: 'diamond-bot', dataPath: '/tmp/.wwebjs_auth' }),
     puppeteer: {
         headless: 'new',
         executablePath: '/snap/bin/chromium',
