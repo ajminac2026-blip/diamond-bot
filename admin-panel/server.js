@@ -1409,6 +1409,7 @@ ${paymentInstructions}
 
 // Diamond Request Status APIs
 const diamondStatusPath = path.join(dbPath, 'diamond-status.json');
+const pinPath = path.join(dbPath, 'pin.json');
 
 app.get('/api/diamond-status', async (req, res) => {
     try {
