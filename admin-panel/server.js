@@ -1569,10 +1569,16 @@ function getGroupStatusMessage(groupId, status) {
     
     if (status.systemStatus === 'on') {
         message = `✅ *Diamond Requests ARE NOW OPEN*\n\n`;
-        message += status.globalMessage || 'You can now place diamond orders! 💎';
+        // If globalMessage is about stock being finished, override it for open status
+        if (status.globalMessage && status.globalMessage.includes('স্টক শেষ')) {
+            message += 'আপনি এখন ডায়মন্ড অর্ডার করতে পারেন! 💎';
+        } else {
+            message += status.globalMessage || 'আপনি এখন ডায়মন্ড অর্ডার করতে পারেন! 💎';
+        }
     } else {
         message = `❌ *Diamond Requests ARE NOW CLOSED*\n\n`;
-        message += status.globalMessage || 'Diamond requests are temporarily unavailable. Please try again later.';
+        // Show appropriate close message
+        message += status.globalMessage || 'ডায়মন্ড রিকোয়েস্ট সাময়িকভাবে বন্ধ আছে। পরে আবার চেষ্টা করুন।';
     }
     
     return message;
