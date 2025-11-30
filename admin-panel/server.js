@@ -1468,16 +1468,29 @@ io.on('connection', (socket) => {
 });
 
 // Watch for file changes and emit updates
-const chokidar = require('chokidar');
-const watcher = chokidar.watch([usersPath, transactionsPath, databasePath], {
-    persistent: true,
-    ignoreInitial: true
-});
+try {
+    const chokidar = require('chokidar');
+    const watcher = chokidar.watch([usersPath, transactionsPath, databasePath], {
+        persistent: true,
+        ignoreInitial: true
+    });
 
-watcher.on('change', (path) => {
-    console.log(`File ${path} changed, emitting update...`);
-    io.emit('dataUpdated', { timestamp: Date.now() });
-});
+    watcher.on('change', (path) => {
+        console.log(`File ${path} changed, emitting update...`);
+        io.emit('dataUpdated', { timestamp: Date.now() });
+    });
+} catch (error) {
+    // Fallback to fs.watch if chokidar is not available
+    console.log('⚠️ Using fs.watch for file monitoring (chokidar not available)');
+    [usersPath, transactionsPath, databasePath].forEach(filePath => {
+        fs.watch(filePath, (eventType) => {
+            if (eventType === 'change') {
+                console.log(`File ${filePath} changed, emitting update...`);
+                io.emit('dataUpdated', { timestamp: Date.now() });
+            }
+        });
+    });
+}
 
 // Serve main HTML
 app.get('/', (req, res) => {
