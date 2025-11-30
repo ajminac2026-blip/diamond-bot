@@ -1,3 +1,50 @@
+// Authentication Check
+function checkAuthentication() {
+    const token = localStorage.getItem('adminToken');
+    if (!token) {
+        window.location.href = '/login';
+        return false;
+    }
+    return true;
+}
+
+// Logout Function
+async function logout() {
+    if (!confirm('আপনি কি সত্যিই লগআউট করতে চান?')) {
+        return;
+    }
+
+    try {
+        const token = localStorage.getItem('adminToken');
+        
+        // Call logout API
+        await fetch('/api/admin/logout', {
+            method: 'POST',
+            headers: {
+                'Authorization': token,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        // Clear all stored data
+        localStorage.removeItem('adminToken');
+        localStorage.removeItem('adminLoggedIn');
+        localStorage.removeItem('rememberMe');
+        sessionStorage.removeItem('adminLoggedIn');
+
+        // Redirect to login
+        window.location.href = '/login';
+    } catch (error) {
+        console.error('Logout error:', error);
+        // Force logout even if API call fails
+        localStorage.removeItem('adminToken');
+        localStorage.removeItem('adminLoggedIn');
+        localStorage.removeItem('rememberMe');
+        sessionStorage.removeItem('adminLoggedIn');
+        window.location.href = '/login';
+    }
+}
+
 // Socket.IO Connection
 const socket = io();
 
@@ -17,6 +64,11 @@ let groupsMarkedForDueReminder = new Set(); // Track groups marked for due remin
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
+    // Check authentication first
+    if (!checkAuthentication()) {
+        return;
+    }
+
     initTheme();
     initSocketListeners();
     loadDashboardData();
