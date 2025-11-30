@@ -4,10 +4,11 @@
   "description": "WhatsApp Diamond Tracker Bot",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
-    "admin": "node admin/server.js",
+    "start": "node start-all.js",
+    "admin": "node admin-panel/server.js",
     "all": "node start-all.js",
-    "dev": "node index.js & node admin/server.js"
+    "dev": "node index.js & node admin-panel/server.js",
+    "bot": "node index.js"
   },
   "dependencies": {
     "body-parser": "^1.20.3",
