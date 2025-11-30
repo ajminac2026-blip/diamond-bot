@@ -1,50 +1,8 @@
-# Replit Configuration for Diamond Bot
-
 run = "npm start"
 entrypoint = "index.js"
 
 [nix]
 channel = "stable-24_05"
 
-[nix.packages]
-pkgs = [
-  "nodejs-20_x",
-  "nodePackages.npm",
-  "chromium",
-  "gtk3",
-  "glib",
-  "nss",
-  "nspr",
-  "at-spi2-atk",
-  "cups",
-  "dbus",
-  "libdrm",
-  "libxkbcommon",
-  "pango",
-  "cairo",
-  "xorg.libX11",
-  "xorg.libXcomposite",
-  "xorg.libXdamage",
-  "xorg.libXext",
-  "xorg.libXfixes",
-  "xorg.libXrandr",
-  "mesa",
-  "expat",
-  "alsa-lib",
-  "bash"
-]
-
-[env]
-PUPPETEER_SKIP_CHROMIUM_DOWNLOAD = "true"
-PUPPETEER_EXECUTABLE_PATH = "/nix/store/chromium"
-
 [deployment]
 run = ["sh", "-c", "npm start"]
-
-[[ports]]
-localPort = 3000
-externalPort = 80
-
-[[ports]]
-localPort = 3001
-externalPort = 3001
