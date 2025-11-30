@@ -1,4 +1,4 @@
-const express = require('express');
+https://diamond-bot-USERNAME.replit.appconst express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
 const path = require('path');
@@ -40,7 +40,62 @@ async function writeJSON(filePath, data) {
     await fs.writeFile(filePath, JSON.stringify(data, null, 2));
 }
 
+// Middleware for authentication
+function verifyToken(req, res, next) {
+    const token = req.headers.authorization?.split(' ')[1];
+    
+    if (!token) {
+        return res.status(401).json({ success: false, error: 'No token provided' });
+    }
+    
+    // For simplicity, using a basic token check. In production, use JWT
+    if (token !== 'admin-token-secret-key') {
+        return res.status(401).json({ success: false, error: 'Invalid token' });
+    }
+    
+    next();
+}
+
 // API Routes
+
+// Login Endpoint
+app.post('/api/login', async (req, res) => {
+    try {
+        const { username, password } = req.body;
+        
+        if (!username || !password) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Username and password are required' 
+            });
+        }
+        
+        // Simple authentication - in production, use proper JWT and bcrypt
+        if (username === 'admin' && password === 'Rubel890') {
+            const token = 'admin-token-secret-key';
+            res.json({ 
+                success: true, 
+                token: token,
+                message: 'Login successful' 
+            });
+        } else {
+            res.status(401).json({ 
+                success: false, 
+                message: 'Invalid credentials' 
+            });
+        }
+    } catch (error) {
+        res.status(500).json({ 
+            success: false, 
+            error: error.message 
+        });
+    }
+});
+
+// Verify Token Endpoint
+app.get('/api/verify-token', verifyToken, (req, res) => {
+    res.json({ success: true, message: 'Token is valid' });
+});
 
 // Dashboard Stats
 app.get('/api/stats', async (req, res) => {
