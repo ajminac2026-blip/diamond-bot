@@ -24,6 +24,17 @@ function requireAuth(req, res, next) {
     next();
 }
 
+// Check if admin is logged in
+function isLoggedIn(req, res, next) {
+    const token = req.headers['authorization'];
+    
+    if (!token || !activeSessions.has(token)) {
+        return res.status(401).json({ success: false, message: 'Not logged in' });
+    }
+    
+    next();
+}
+
 // Serve login page
 app.get('/login', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'login.html'));
@@ -337,6 +348,17 @@ app.post('/api/groups/:groupId/rate', async (req, res) => {
         // Emit to bot to send WhatsApp message
         io.emit('sendGroupMessage', { groupId, message });
 
+        // Also send via bot API
+        try {
+            await fetch('http://localhost:3003/api/bot-send-message', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ groupId, message })
+            });
+        } catch (err) {
+            console.error('❌ Failed to send rate update via bot API:', err.message);
+        }
+
         res.json({ success: true, groupId, rate, groupName });
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -441,6 +463,17 @@ app.post('/api/groups/bulk-rate', async (req, res) => {
             
             // Emit to bot to send WhatsApp message
             io.emit('sendGroupMessage', { groupId, message });
+
+            // Also send via bot API
+            try {
+                fetch('http://localhost:3003/api/bot-send-message', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ groupId, message })
+                }).catch(err => console.error(`❌ Failed to send bulk rate update to ${groupId}:`, err.message));
+            } catch (err) {
+                console.error(`❌ Error sending bulk rate update to ${groupId}:`, err.message);
+            }
         });
 
         await writeJSON(databasePath, database);
@@ -1320,7 +1353,7 @@ ${paymentInstructions}
             
             // Send message via bot API
             try {
-                const botResponse = await fetch('http://localhost:3001/api/bot-send-message', {
+                const botResponse = await fetch('http://localhost:3003/api/bot-send-message', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
