@@ -27,7 +27,8 @@ setTimeout(() => {
         console.log(`\n❌ Admin Panel exited with code ${code}`);
     });
 
-    console.log('\n✅ Admin Panel: http://localhost:3000\n');
+    console.log('\n✅ Admin Panel: http://localhost:3000');
+    console.log('✅ Replit URL: Check the Webview tab above or click the 🌐 icon\n');
 }, 2000);
 
 // Handle bot process exit
