@@ -47,6 +47,11 @@ client.on('qr', (qr) => {
     console.log('\n\n📱 SCAN THIS QR CODE WITH WHATSAPP:\n');
     qrcode.generate(qr, { small: true });
     currentQRCode = qr; // Store QR code
+    
+    // Save QR code to file
+    const fs = require('fs');
+    fs.writeFileSync('/root/diamond-bot/qr-code.txt', qr, 'utf8');
+    console.log('✅ QR code saved to qr-code.txt');
     console.log('\n\n');
 });
 
