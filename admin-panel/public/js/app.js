@@ -2688,3 +2688,48 @@ function toggleDueReminder(groupId) {
         }
     }
 }
+
+// Command Management Modal
+function showCommandsModal() {
+    const modalHTML = `
+        <div id="commandsModal" class="modal" onclick="if(event.target === this) closeModal()">
+            <div class="modal-content">
+                <h2><i class="fas fa-terminal"></i> Command Management</h2>
+                <p style="color: #aaa; margin-top: 20px;">Commands feature coming soon...</p>
+                <button onclick="closeModal()" style="margin-top: 20px; padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer;">Close</button>
+            </div>
+        </div>
+    `;
+    document.getElementById('modalContainer').innerHTML = modalHTML;
+    document.getElementById('commandsModal').style.display = 'flex';
+}
+
+// Payment Keywords Modal
+function showPaymentKeywordsModal() {
+    const modalHTML = `
+        <div id="paymentKeywordsModal" class="modal" onclick="if(event.target === this) closeModal()">
+            <div class="modal-content">
+                <h2><i class="fas fa-credit-card"></i> Payment Keywords</h2>
+                <p style="color: #aaa; margin-top: 20px;">Payment keywords feature coming soon...</p>
+                <button onclick="closeModal()" style="margin-top: 20px; padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer;">Close</button>
+            </div>
+        </div>
+    `;
+    document.getElementById('modalContainer').innerHTML = modalHTML;
+    document.getElementById('paymentKeywordsModal').style.display = 'flex';
+}
+
+// Edit Message Settings Modal
+function showEditMessageModal() {
+    const modalHTML = `
+        <div id="editMessageModal" class="modal" onclick="if(event.target === this) closeModal()">
+            <div class="modal-content">
+                <h2><i class="fas fa-edit"></i> Edit Message Settings</h2>
+                <p style="color: #aaa; margin-top: 20px;">Edit message settings feature coming soon...</p>
+                <button onclick="closeModal()" style="margin-top: 20px; padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer;">Close</button>
+            </div>
+        </div>
+    `;
+    document.getElementById('modalContainer').innerHTML = modalHTML;
+    document.getElementById('editMessageModal').style.display = 'flex';
+}
