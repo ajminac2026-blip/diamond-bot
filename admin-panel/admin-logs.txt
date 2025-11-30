@@ -1,0 +1,34 @@
+[2025-11-27T09:49:37.989Z] 📢 Due reminder sent to Bot making | Due: ৳5000
+[2025-11-27T09:56:32.916Z] 📢 Due reminder sent to Bot making | Due: ৳5000
+[2025-11-27T11:11:32.177Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-11-27T11:31:27.527Z] Updated user: 115930327715989 (Name: User 1, Balance: 0, Due: 5000)
+[2025-11-27T11:31:43.733Z] Updated user: 115930327715989 (Name: User 1, Balance: 0, Due: 3300)
+[2025-11-27T11:34:44.491Z] Updated user: 115930327715989 (Name: User 1, Balance: 0, Due: 1000)
+[2025-11-27T11:39:42.387Z] Updated user: 115930327715989 (Name: Maneger, Balance: 0, DueBalance: 2300)
+[2025-11-27T11:44:22.242Z] Updated user: 115930327715989 (Name: User 1, Balance: 0, DueBalance: 5000)
+[2025-11-27T11:45:12.472Z] Updated user: 115930327715989 (Name: User 1, Balance: 0, DueBalance: 6500)
+[2025-11-27T11:55:47.097Z] Updated user: 115930327715989 (Name: User 1, Balance: 0, DueBalance: 2200)
+[2025-11-27T13:01:41.312Z] 💎 Admin diamond stock updated to: 111
+[2025-11-27T13:01:55.541Z] 💎 Admin diamond stock updated to: 1000
+[2025-11-27T13:13:02.679Z] 💎 Admin diamond stock updated to: 700000
+[2025-11-27T13:14:56.738Z] 💎 Admin diamond stock updated to: 0
+[2025-11-27T13:24:10.110Z] 💎 Admin diamond stock updated to: 1000
+[2025-11-27T13:28:31.174Z] 💎 Admin diamond stock updated to: 1000
+[2025-11-27T13:35:40.901Z] 💎 Admin diamond stock updated to: 10000
+[2025-11-27T13:46:34.260Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-11-27T14:20:13.906Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-11-27T15:25:43.827Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-11-27T15:26:11.495Z] 💎 Admin diamond stock updated to: 100000
+[2025-11-27T15:28:23.418Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-11-27T15:29:07.337Z] Added WhatsApp admin: 8801339842889
+[2025-11-27T15:30:41.129Z] Removed WhatsApp admin: 8801339842889
+[2025-11-27T15:30:52.187Z] Added WhatsApp admin: 8801339842889
+[2025-11-30T05:42:25.711Z] 🗑️ ALL DATA CLEARED BY ADMIN
+[2025-11-30T07:09:22.711Z] undefined
+[2025-11-30T07:12:17.372Z] undefined
+[2025-11-30T07:18:57.473Z] undefined
+[2025-11-30T07:23:19.559Z] undefined
+[2025-11-30T07:26:22.247Z] undefined
+[2025-11-30T07:30:59.090Z] undefined
+[2025-11-30T08:17:24.602Z] 💳 Payment keywords updated (21 total keywords)
+[2025-11-30T08:24:22.078Z] 🔐 Admin logged in

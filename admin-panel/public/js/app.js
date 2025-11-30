@@ -1,0 +1,2621 @@
+// Socket.IO Connection
+const socket = io();
+
+// Global State
+let currentLang = 'bn';
+let currentTheme = localStorage.getItem('theme') || 'dark';
+let allGroups = [];
+let allTransactions = [];
+let allOrders = [];
+let allUsers = [];
+let diamondStatus = { systemStatus: 'on', globalMessage: '', groupSettings: {} };
+let analyticsChart = null;
+let expandedGroups = new Set(); // Track expanded groups
+let isInputFocused = false; // Track if user is typing
+let selectedGroups = new Set(); // Track selected checkboxes
+let groupsMarkedForDueReminder = new Set(); // Track groups marked for due reminders
+
+// Initialize
+document.addEventListener('DOMContentLoaded', () => {
+    initTheme();
+    initSocketListeners();
+    loadDashboardData();
+    
+    // Load initial data
+    refreshData();
+});
+
+// Theme Management
+function initTheme() {
+    if (currentTheme === 'light') {
+        document.body.setAttribute('data-theme', 'light');
+        document.querySelector('#themeToggle i').className = 'fas fa-sun';
+    }
+}
+
+document.getElementById('themeToggle').addEventListener('click', () => {
+    currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    localStorage.setItem('theme', currentTheme);
+    
+    if (currentTheme === 'light') {
+        document.body.setAttribute('data-theme', 'light');
+        document.querySelector('#themeToggle i').className = 'fas fa-sun';
+    } else {
+        document.body.removeAttribute('data-theme');
+        document.querySelector('#themeToggle i').className = 'fas fa-moon';
+    }
+});
+
+// Language Toggle
+document.getElementById('langToggle').addEventListener('click', () => {
+    currentLang = currentLang === 'bn' ? 'en' : 'bn';
+    showToast(currentLang === 'bn' ? 'Language: Bangla' : 'Language: English', 'success');
+});
+
+// Socket.IO Listeners
+function initSocketListeners() {
+    socket.on('connect', () => {
+        console.log('Connected to server');
+        // Silent connection - no toast
+    });
+
+    socket.on('disconnect', () => {
+        console.log('Disconnected from server');
+        // Silent disconnect - no toast
+    });
+
+    socket.on('dataUpdated', () => {
+        console.log('Data updated, refreshing silently...');
+        if (!isInputFocused) {
+            silentRefreshData(); // Only refresh if user is not typing
+        }
+    });
+
+    socket.on('groupRateUpdated', (data) => {
+        console.log(`Group ${data.groupId} rate updated to ${data.rate}`);
+        if (!isInputFocused) {
+            loadGroups();
+        }
+    });
+
+    socket.on('bulkRateUpdated', (data) => {
+        console.log(`${data.count} groups updated to rate ${data.rate}`);
+        if (!isInputFocused) {
+            loadGroups();
+        }
+    });
+
+    socket.on('depositApproved', (data) => {
+        console.log(`Deposit approved: ৳${data.amount}`);
+        loadPendingDeposits();
+        loadStats();
+    });
+
+    socket.on('depositRejected', () => {
+        console.log('Deposit rejected');
+        loadPendingDeposits();
+    });
+
+    socket.on('userStatusChanged', (data) => {
+        const status = data.blocked ? 'blocked' : 'unblocked';
+        console.log(`User ${status}`);
+    });
+
+    socket.on('userUpdated', (data) => {
+        console.log(`User ${data.phone} updated: balance=${data.balance}, dueBalance=${data.dueBalance}`);
+        if (!isInputFocused) {
+            // Refresh groups to show updated due amounts
+            loadGroups();
+            loadStats();
+            // Also refresh the user list if modal is open
+            const modalContainer = document.getElementById('modalContainer');
+            if (modalContainer && modalContainer.innerHTML.includes('User')) {
+                loadUsers(); // This will refresh the user list
+            }
+        }
+    });
+
+    socket.on('autoDeductionLogged', (data) => {
+        console.log(`Auto-deduction logged: ৳${data.amount} for ${data.groupName}`);
+        loadLastAutoDeduction();
+    });
+
+    socket.on('autoDeductionCleared', () => {
+        console.log('Auto-deductions cleared');
+        loadLastAutoDeduction();
+    });
+}
+
+// View Navigation
+function showView(viewId) {
+    // Hide all views
+    document.querySelectorAll('.view').forEach(view => {
+        view.classList.remove('active');
+    });
+
+    // Show selected view
+    document.getElementById(viewId).classList.add('active');
+
+    // Update bottom nav
+    document.querySelectorAll('.nav-item').forEach(item => {
+        item.classList.remove('active');
+    });
+    event.target.closest('.nav-item').classList.add('active');
+
+    // Load data for specific view
+    if (viewId === 'groupsView') {
+        loadGroups();
+    } else if (viewId === 'transactionsView') {
+        loadPendingDeposits();
+        loadTransactions();
+        loadOrders();
+    } else if (viewId === 'ordersView') {
+        loadOrdersNew();
+    }
+}
+
+// Refresh All Data
+async function refreshData() {
+    try {
+        await Promise.all([
+            loadStats(),
+            loadGroups(),
+            loadTransactions(),
+            loadPendingDeposits(),
+            loadOrders(),
+            loadAnalytics(),
+            loadUsers(),
+            loadLastAutoDeduction(),
+            loadDiamondStatus()
+        ]);
+        showToast('Data updated successfully', 'success');
+    } catch (error) {
+        console.error('Error refreshing data:', error);
+        showToast('Error loading data', 'error');
+    }
+}
+
+// Silent Refresh (no toast notification)
+async function silentRefreshData() {
+    try {
+        await Promise.all([
+            loadStats(),
+            loadGroups(),
+            loadTransactions(),
+            loadPendingDeposits(),
+            loadOrders(),
+            loadOrdersNew(),
+            loadAnalytics(),
+            loadUsers(),
+            loadLastAutoDeduction(),
+            loadDiamondStatus()
+        ]);
+        console.log('Data refreshed silently');
+    } catch (error) {
+        console.error('Error refreshing data:', error);
+    }
+}
+
+// Diamond Request System Functions
+async function loadDiamondStatus() {
+    try {
+        const response = await fetch('/api/diamond-status');
+        diamondStatus = await response.json();
+        updateDiamondStatusUI();
+        updateGroupMessagesList();
+    } catch (error) {
+        console.error('Error loading diamond status:', error);
+    }
+}
+
+function refreshDiamondStatus() {
+    loadDiamondStatus();
+    showToast('Diamond status updated', 'success');
+}
+
+async function toggleDiamondSystem() {
+    try {
+        // Show PIN input modal
+        const pin = prompt('Enter PIN:');
+        if (pin === null) return; // User cancelled
+        
+        const newStatus = diamondStatus.systemStatus === 'on' ? 'off' : 'on';
+        const response = await fetch('/api/diamond-status/toggle', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ systemStatus: newStatus, pin: pin })
+        });
+        
+        if (response.ok) {
+            await loadDiamondStatus();
+            const statusText = newStatus === 'on' ? '✅ TURNED ON' : '❌ TURNED OFF';
+            showToast(`Diamond request system ${statusText}. Message sent to all groups!`, 'success');
+        } else {
+            const errorData = await response.json();
+            showToast(errorData.message || 'Failed to toggle system', 'error');
+        }
+    } catch (error) {
+        console.error('Error toggling system:', error);
+        showToast('Failed to toggle system', 'error');
+    }
+}
+
+function updateDiamondStatusUI() {
+    const statusBadge = document.getElementById('statusBadge');
+    const statusMessage = document.getElementById('globalMessage');
+    const stockAmount = document.getElementById('stockAmount');
+    const diamondStatusCard = document.getElementById('diamondStatusCard');
+    
+    if (statusBadge && statusMessage) {
+        const isOn = diamondStatus.systemStatus === 'on';
+        statusBadge.innerHTML = `<i class="fas fa-${isOn ? 'check-circle' : 'times-circle'}"></i> ${isOn ? 'ON' : 'OFF'}`;
+        statusBadge.className = isOn ? 'status-badge' : 'status-badge off';
+        statusMessage.textContent = diamondStatus.globalMessage || 'No message set';
+    }
+    
+    if (stockAmount) {
+        stockAmount.textContent = (diamondStatus.adminDiamondStock || 0).toLocaleString();
+    }
+}
+
+function updateGroupMessagesList() {
+    const groupsList = document.getElementById('groupMessagesList');
+    if (!groupsList) return;
+    
+    if (allGroups.length === 0) {
+        groupsList.innerHTML = '<div class="loading-placeholder"><i class="fas fa-info-circle"></i> No groups available</div>';
+        return;
+    }
+    
+    groupsList.innerHTML = allGroups.map(group => {
+        const groupId = group.id || group.groupId;
+        const groupName = group.name || group.groupName || 'Unknown';
+        const groupSettings = diamondStatus.groupSettings && diamondStatus.groupSettings[groupId] ? diamondStatus.groupSettings[groupId] : {};
+        const message = groupSettings.message || 'Use global message';
+        
+        return `
+            <div class="group-message-item">
+                <div class="group-message-info">
+                    <p class="group-message-name">${groupName}</p>
+                    <p class="group-message-text">${message}</p>
+                </div>
+                <div class="group-message-actions">
+                    <button class="btn-group-edit" onclick="showEditGroupMessageModal('${groupId}', '${groupName}')">
+                        <i class="fas fa-edit"></i> Edit
+                    </button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function showEditGlobalMessageModal() {
+    const modalHTML = `
+        <div class="modal" onclick="closeModal(event)">
+            <div class="modal-content" onclick="event.stopPropagation()">
+                <div class="modal-header">
+                    <h2><i class="fas fa-edit"></i> Edit Message</h2>
+                    <button class="modal-close" onclick="closeModal()"><i class="fas fa-times"></i></button>
+                </div>
+                
+                <div class="form-group">
+                    <label>System Message (when ON):</label>
+                    <textarea class="form-input" id="globalMessageInput" style="resize: vertical; min-height: 100px; padding: 12px;" placeholder="Enter message...">${diamondStatus.globalMessage}</textarea>
+                </div>
+                
+                <div class="button-group">
+                    <button class="btn-save" onclick="saveGlobalMessage()">
+                        <i class="fas fa-save"></i> Save
+                    </button>
+                    <button class="btn-cancel" onclick="closeModal()">
+                        <i class="fas fa-times"></i> Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('modalContainer').innerHTML = modalHTML;
+}
+
+function showEditStockModal() {
+    const modalHTML = `
+        <div class="modal" onclick="closeModal(event)">
+            <div class="modal-content" onclick="event.stopPropagation()">
+                <div class="modal-header">
+                    <h2><i class="fas fa-gem"></i> Set Diamond Stock</h2>
+                    <button class="modal-close" onclick="closeModal()"><i class="fas fa-times"></i></button>
+                </div>
+                
+                <div class="form-group">
+                    <label>💎 Total Diamond Stock:</label>
+                    <input type="number" class="form-input" id="stockInput" value="${diamondStatus.adminDiamondStock || 10000}" placeholder="Stock amount">
+                </div>
+                
+                <div class="form-group" style="background: rgba(67, 233, 123, 0.1); padding: 15px; border-radius: 8px; border-left: 4px solid #43e97b;">
+                    <p style="margin: 0; color: var(--text-secondary); font-size: 0.9rem;">
+                        <i class="fas fa-info-circle"></i> When stock runs out, the system will automatically turn off and send messages to all groups.
+                    </p>
+                </div>
+                
+                <div class="button-group">
+                    <button class="btn-save" onclick="saveStock()">
+                        <i class="fas fa-save"></i> Save
+                    </button>
+                    <button class="btn-cancel" onclick="closeModal()">
+                        <i class="fas fa-times"></i> Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('modalContainer').innerHTML = modalHTML;
+}
+
+async function saveGlobalMessage() {
+    try {
+        const message = document.getElementById('globalMessageInput').value;
+        
+        if (!message.trim()) {
+            showToast('Please enter a message', 'warning');
+            return;
+        }
+
+        const response = await fetch('/api/diamond-status/global-message', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ globalMessage: message })
+        });
+        
+        if (response.ok) {
+            await loadDiamondStatus();
+            closeModal();
+            showToast('Message saved and sent to all groups', 'success');
+        } else {
+            showToast('Failed to save message', 'error');
+        }
+    } catch (error) {
+        console.error('Error saving message:', error);
+        showToast('Failed to save message', 'error');
+    }
+}
+
+async function saveStock() {
+    try {
+        const stock = parseInt(document.getElementById('stockInput').value);
+        
+        if (isNaN(stock) || stock < 0) {
+            showToast('Please enter a valid number', 'warning');
+            return;
+        }
+
+        const response = await fetch('/api/diamond-status/set-stock', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ adminDiamondStock: stock })
+        });
+        
+        if (response.ok) {
+            await loadDiamondStatus();
+            closeModal();
+            showToast(`Stock saved: ${stock.toLocaleString()} 💎`, 'success');
+        } else {
+            showToast('Failed to save stock', 'error');
+        }
+    } catch (error) {
+        console.error('Error saving stock:', error);
+        showToast('Failed to save stock', 'error');
+    }
+}
+
+function showEditGroupMessageModal(groupId, groupName) {
+    if (!groupId || groupId === 'undefined') {
+        showToast('Invalid group ID', 'error');
+        return;
+    }
+    
+    const groupSettings = diamondStatus.groupSettings && diamondStatus.groupSettings[groupId] ? diamondStatus.groupSettings[groupId] : {};
+    const message = groupSettings.message || '';
+    
+    const modalHTML = `
+        <div class="modal" onclick="closeModal(event)">
+            <div class="modal-content" onclick="event.stopPropagation()">
+                <div class="modal-header">
+                    <h2><i class="fas fa-edit"></i> Edit Group Message</h2>
+                    <button class="modal-close" onclick="closeModal()"><i class="fas fa-times"></i></button>
+                </div>
+                
+                <div class="form-group">
+                    <label>Group: <strong>${groupName}</strong></label>
+                </div>
+                
+                <div class="form-group">
+                    <label>Custom Message (leave empty to use global message):</label>
+                    <textarea class="form-input" id="groupMessageInput" style="resize: vertical; min-height: 100px; padding: 12px;" placeholder="Enter custom message for this group...">${message}</textarea>
+                </div>
+                
+                <div class="button-group">
+                    <button class="btn-save" onclick="saveGroupMessage('${groupId}')">
+                        <i class="fas fa-save"></i> Save
+                    </button>
+                    <button class="btn-cancel" onclick="closeModal()">
+                        <i class="fas fa-times"></i> Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('modalContainer').innerHTML = modalHTML;
+}
+
+async function saveGroupMessage(groupId) {
+    try {
+        if (!groupId || groupId === 'undefined') {
+            showToast('Invalid group ID', 'error');
+            return;
+        }
+        
+        const message = document.getElementById('groupMessageInput').value;
+        
+        const response = await fetch('/api/diamond-status/group-message', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ groupId, message })
+        });
+        
+        if (response.ok) {
+            await loadDiamondStatus();
+            closeModal();
+            showToast('Group message updated and sent', 'success');
+        } else {
+            showToast('Failed to save group message', 'error');
+        }
+    } catch (error) {
+        console.error('Error saving group message:', error);
+        showToast('Failed to save group message', 'error');
+    }
+}
+
+// Load Dashboard Stats
+async function loadStats() {
+    try {
+        const response = await fetch('/api/stats');
+        const stats = await response.json();
+
+        document.getElementById('totalUsers').textContent = stats.totalUsers;
+        document.getElementById('totalDeposits').textContent = `৳${stats.totalDeposits.toLocaleString()}`;
+        document.getElementById('pendingDiamonds').textContent = stats.pendingDiamonds.toLocaleString();
+        document.getElementById('pendingAmount').textContent = `৳${Math.round(stats.pendingAmount).toLocaleString()}`;
+        document.getElementById('totalOrders').textContent = stats.totalOrders;
+        document.getElementById('quickPendingCount').textContent = stats.pendingDiamonds > 0 ? stats.pendingDiamonds : '0';
+
+        // Update notification badge
+        document.getElementById('notifBadge').textContent = stats.pendingDiamonds > 0 ? stats.pendingDiamonds : '0';
+    } catch (error) {
+        console.error('Error loading stats:', error);
+    }
+}
+
+// Load Last Auto-Deduction
+async function loadLastAutoDeduction() {
+    try {
+        const response = await fetch('/api/auto-deductions');
+        const deductions = await response.json();
+        const container = document.getElementById('autoDeductList');
+
+        if (!Array.isArray(deductions) || deductions.length === 0) {
+            container.innerHTML = `
+                <div class="auto-deduct-placeholder">
+                    <i class="fas fa-info-circle"></i>
+                    <p>No auto-deductions yet</p>
+                </div>
+            `;
+            return;
+        }
+
+        // Sort by newest first and get only the last one
+        const sorted = [...deductions].sort((a, b) => 
+            new Date(b.createdAt || b.timestamp) - new Date(a.createdAt || a.timestamp)
+        );
+        
+        const lastDeduction = sorted[0]; // Only the most recent one
+        const deductionDate = new Date(lastDeduction.timestamp || lastDeduction.createdAt);
+        const timeAgo = getTimeAgo(deductionDate);
+
+        container.innerHTML = `
+            <div class="auto-deduct-item">
+                <div class="auto-deduct-item-left">
+                    <div class="auto-deduct-item-group">
+                        <i class="fas fa-layer-group"></i>
+                        ${lastDeduction.groupName}
+                    </div>
+                    <div class="auto-deduct-item-time">
+                        <i class="fas fa-clock"></i>
+                        ${timeAgo}
+                    </div>
+                </div>
+                <div class="auto-deduct-item-amount">
+                    ৳${lastDeduction.amount.toLocaleString()}
+                </div>
+            </div>
+        `;
+    } catch (error) {
+        console.error('Error loading auto-deductions:', error);
+    }
+}
+
+// Helper function to calculate time ago
+function getTimeAgo(date) {
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins} min${diffMins > 1 ? 's' : ''} ago`;
+    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+    if (diffDays < 30) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+    return date.toLocaleDateString();
+}
+
+// Load Groups
+async function loadGroups() {
+    try {
+        const response = await fetch('/api/groups');
+        allGroups = await response.json();
+
+        const container = document.getElementById('groupsGrid');
+        
+        if (allGroups.length === 0) {
+            container.innerHTML = '<div class="loading-state">No groups found</div>';
+            return;
+        }
+
+        container.innerHTML = allGroups.map(group => {
+            const isExpanded = expandedGroups.has(group.id);
+            const isSelected = selectedGroups.has(group.id);
+            
+            return `
+            <div class="group-card-collapsed ${isExpanded ? 'expanded' : ''}" data-group-id="${group.id}">
+                <!-- Collapsed Header (Always Visible) -->
+                <div class="group-header-collapsed">
+                    <div class="group-name-main" onclick="toggleGroupDashboard('${group.id}')">
+                        <input type="checkbox" class="checkbox-select" value="${group.id}" ${isSelected ? 'checked' : ''} onclick="event.stopPropagation(); toggleGroupSelection('${group.id}')">
+                        <i class="fas fa-users"></i>
+                        <span>${group.name}</span>
+                    </div>
+                    <div class="group-info-quick">
+                        <div class="quick-info-item">
+                            <span class="info-label">💎 Rate:</span>
+                            <span class="info-value">${group.rate}/tk</span>
+                        </div>
+                        <div class="quick-info-item">
+                            <span class="info-label">💰 Due:</span>
+                            <span class="info-value">৳${group.totalDue.toLocaleString()}</span>
+                        </div>
+                        <button class="reminder-toggle-btn ${groupsMarkedForDueReminder.has(group.id) ? 'active' : ''}" 
+                                onclick="event.stopPropagation(); toggleDueReminder('${group.id}')" 
+                                title="Mark for due reminder"
+                                style="background: none; border: none; cursor: pointer; font-size: 18px; color: ${groupsMarkedForDueReminder.has(group.id) ? '#ff6b6b' : '#666'}; transition: all 0.3s ease;">
+                            <i class="fas fa-bell"></i>
+                        </button>
+                    </div>
+                    <div class="expand-icon" onclick="toggleGroupDashboard('${group.id}')">
+                        <i class="fas fa-chevron-down"></i>
+                    </div>
+                </div>
+                
+                <!-- Expandable Dashboard (Hidden by default) -->
+                <div class="group-dashboard-expandable ${isExpanded ? 'open' : ''}">
+                    <!-- Group Dashboard -->
+                    <div class="group-dashboard">
+                        <div class="dashboard-section">
+                            <h4><i class="fas fa-check-circle"></i> Completed Orders</h4>
+                            <div class="stats-mini-grid">
+                                <div class="stat-mini">
+                                    <div class="stat-mini-value">${group.totalOrders}</div>
+                                    <div class="stat-mini-label">Orders</div>
+                                </div>
+                                <div class="stat-mini">
+                                    <div class="stat-mini-value">${group.totalDiamonds.toLocaleString()}</div>
+                                    <div class="stat-mini-label">Diamonds</div>
+                                </div>
+                                <div class="stat-mini">
+                                    <div class="stat-mini-value">৳${group.totalAmount.toLocaleString()}</div>
+                                    <div class="stat-mini-label">Total Amount</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="dashboard-section">
+                            <h4><i class="fas fa-clock"></i> Pending Orders</h4>
+                            <div class="stats-mini-grid">
+                                <div class="stat-mini">
+                                    <div class="stat-mini-value">${group.pendingOrders}</div>
+                                    <div class="stat-mini-label">Orders</div>
+                                </div>
+                                <div class="stat-mini">
+                                    <div class="stat-mini-value">${group.pendingDiamonds.toLocaleString()}</div>
+                                    <div class="stat-mini-label">Diamonds</div>
+                                </div>
+                                <div class="stat-mini">
+                                    <div class="stat-mini-value">৳${group.pendingAmount.toLocaleString()}</div>
+                                    <div class="stat-mini-label">Pending Amount</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="dashboard-section">
+                            <h4><i class="fas fa-user-friends"></i> Users & Balance</h4>
+                            <div class="stats-mini-grid">
+                                <div class="stat-mini">
+                                    <div class="stat-mini-value">${group.totalUsers}</div>
+                                    <div class="stat-mini-label">Total Users</div>
+                                </div>
+                                <div class="stat-mini">
+                                    <div class="stat-mini-value">৳${group.totalUserBalance.toLocaleString()}</div>
+                                    <div class="stat-mini-label">Users Balance</div>
+                                </div>
+                                <div class="stat-mini">
+                                    <div class="stat-mini-value">৳${(group.dueLimit || 0).toLocaleString()}</div>
+                                    <div class="stat-mini-label">Due Limit</div>
+                                </div>
+                                <div class="stat-mini stat-mini-due" style="background: linear-gradient(135deg, ${group.totalDue === 0 ? '#4facfe 0%, #00f2fe' : '#f093fb 0%, #f5576c'} 100%);">
+                                    <div class="stat-mini-value stat-mini-due-value">৳${group.totalDue.toLocaleString()}</div>
+                                    <div class="stat-mini-label stat-mini-due-label">Due Balance</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Due Summary by User -->
+                    ${group.userDueBreakdown && group.userDueBreakdown.length > 0 ? `
+                    <div class="dashboard-section">
+                        <h4><i class="fas fa-credit-card"></i> Due Summary</h4>
+                        <div class="due-summary">
+                            ${group.userDueBreakdown.map(user => `
+                                <div class="due-item">
+                                    <div class="due-user-info">
+                                        <span class="due-user-name">${user.displayName}</span>
+                                        <span class="due-user-phone">${user.userId}</span>
+                                    </div>
+                                    <div class="due-user-amount">৳${user.due.toLocaleString()}</div>
+                                </div>
+                            `).join('')}
+                            <div class="due-footer">
+                                <div class="due-footer-row">
+                                    <span>📊 Total Orders:</span>
+                                    <strong style="color: #43e97b;">৳${group.totalAmount.toLocaleString()}</strong>
+                                </div>
+                                <div class="due-footer-row">
+                                    <span>💰 Total Paid:</span>
+                                    <strong style="color: #4facfe;">৳${group.totalPaid.toLocaleString()}</strong>
+                                </div>
+                                <div class="due-total">
+                                    <span><strong>📉 Total Due:</strong></span>
+                                    <strong style="color: #667eea; font-size: 1.1em;">৳${Math.max(0, group.totalAmount - group.totalPaid).toLocaleString()}</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    ` : ''}
+                    
+                    <!-- Rate Control -->
+                    <div class="rate-control">
+                        <input type="number" 
+                               class="rate-input" 
+                               value="${group.rate}" 
+                               min="1" 
+                               max="100"
+                               placeholder="Rate">
+                        <button class="btn-update" onclick="updateGroupRate('${group.id}')">
+                            <i class="fas fa-save"></i> Update Rate
+                        </button>
+                    </div>
+                    
+                    <!-- Due Limit Control -->
+                    <div class="rate-control" style="margin-top: 10px;">
+                        <input type="number" 
+                               class="due-limit-input" 
+                               value="${group.dueLimit || 0}" 
+                               min="0" 
+                               step="1000"
+                               placeholder="Due Limit (৳)">
+                        <button class="btn-update" onclick="updateGroupDueLimit('${group.id}')" style="background: #4facfe;">
+                            <i class="fas fa-money-bill-wave"></i> Set Due Limit
+                        </button>
+                    </div>
+                    
+                    <!-- Clear Data Button -->
+                    <div class="rate-control" style="margin-top: 10px;">
+                        <button class="btn-delete" onclick="clearGroupData('${group.id}', '${group.name}')" style="width: 100%; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); border: none;">
+                            <i class="fas fa-trash-alt"></i> Clear Group Data
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        }).join('');
+        
+        // Add event listeners after HTML is rendered
+        setTimeout(() => {
+            document.querySelectorAll('.rate-input, .due-limit-input, .btn-update, .btn-delete, .group-dashboard').forEach(el => {
+                el.addEventListener('touchstart', (e) => {
+                    e.stopPropagation();
+                }, { passive: true });
+                el.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                });
+            });
+            
+            // Track input focus to prevent refresh while typing
+            document.querySelectorAll('.rate-input, .due-limit-input').forEach(input => {
+                input.addEventListener('focus', () => {
+                    isInputFocused = true;
+                    console.log('Input focused - auto-refresh paused');
+                });
+                input.addEventListener('blur', () => {
+                    isInputFocused = false;
+                    console.log('Input blurred - auto-refresh resumed');
+                });
+            });
+        }, 100);
+    } catch (error) {
+        console.error('Error loading groups:', error);
+    }
+}
+
+// Toggle Group Dashboard
+function toggleGroupDashboard(groupId) {
+    const card = document.querySelector(`[data-group-id="${groupId}"]`);
+    const dashboard = card.querySelector('.group-dashboard-expandable');
+    const icon = card.querySelector('.expand-icon i');
+    
+    const isCurrentlyOpen = dashboard.classList.contains('open');
+    
+    if (!isCurrentlyOpen) {
+        // Expand
+        dashboard.classList.add('open');
+        icon.classList.remove('fa-chevron-down');
+        icon.classList.add('fa-chevron-up');
+        card.classList.add('expanded');
+        expandedGroups.add(groupId);
+    } else {
+        // Collapse
+        dashboard.classList.remove('open');
+        icon.classList.remove('fa-chevron-up');
+        icon.classList.add('fa-chevron-down');
+        card.classList.remove('expanded');
+        expandedGroups.delete(groupId);
+    }
+}
+
+// Toggle Group Selection (Checkbox)
+function toggleGroupSelection(groupId) {
+    if (selectedGroups.has(groupId)) {
+        selectedGroups.delete(groupId);
+    } else {
+        selectedGroups.add(groupId);
+    }
+}
+
+// Update Group Rate
+async function updateGroupRate(groupId) {
+    const card = document.querySelector(`[data-group-id="${groupId}"]`);
+    const rateInput = card.querySelector('.rate-input');
+    const rate = parseFloat(rateInput.value);
+
+    if (rate < 1 || rate > 100) {
+        showToast('Rate must be between 1 and 100', 'error');
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/groups/${groupId}/rate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rate })
+        });
+
+        const result = await response.json();
+        
+        if (result.success) {
+            showToast(`Rate updated to ${rate}`, 'success');
+            // Here you would send WhatsApp notification to the group
+        } else {
+            showToast('Failed to update rate', 'error');
+        }
+    } catch (error) {
+        console.error('Error updating rate:', error);
+        showToast('Error updating rate', 'error');
+    }
+}
+
+// Update Group Due Limit
+async function updateGroupDueLimit(groupId) {
+    const card = document.querySelector(`[data-group-id="${groupId}"]`);
+    const dueLimitInput = card.querySelector('.due-limit-input');
+    const dueLimit = parseFloat(dueLimitInput.value);
+
+    if (dueLimit < 0) {
+        showToast('Due limit cannot be negative', 'error');
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/groups/${groupId}/due-limit`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ dueLimit })
+        });
+
+        const result = await response.json();
+        
+        if (result.success) {
+            showToast(`Due limit set to ৳${dueLimit.toLocaleString()}`, 'success');
+            loadGroups();
+        } else {
+            showToast('Failed to update due limit', 'error');
+        }
+    } catch (error) {
+        console.error('Error updating due limit:', error);
+        showToast('Error updating due limit', 'error');
+    }
+}
+
+// Clear Group Data
+async function clearGroupData(groupId, groupName) {
+    const confirmMsg = `Are you sure you want to delete all data for "${groupName}" group?\n\nThis will delete:\n• All Completed Orders\n• All Pending Orders\n• All User Balance\n• All Transaction History\n\nThis action cannot be undone!`;
+    
+    if (!confirm(confirmMsg)) {
+        return;
+    }
+
+    // Double confirmation
+    const doubleConfirm = confirm('Warning! This is a dangerous action. Please confirm again.');
+    if (!doubleConfirm) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/groups/${groupId}/clear`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        const result = await response.json();
+        
+        if (result.success) {
+            showToast(`All data for "${groupName}" has been deleted`, 'success');
+            await silentRefreshData();
+        } else {
+            showToast('Failed to delete data', 'error');
+        }
+    } catch (error) {
+        console.error('Error clearing group data:', error);
+        showToast('Error deleting data', 'error');
+    }
+}
+
+// Bulk Rate Update
+function showBulkRateModal() {
+    const selectedGroups = Array.from(document.querySelectorAll('.checkbox-select:checked'))
+        .map(cb => cb.value);
+
+    if (selectedGroups.length === 0) {
+        showToast('Please select at least one group', 'warning');
+        return;
+    }
+
+    const modal = `
+        <div class="modal" onclick="closeModal(event)">
+            <div class="modal-content" onclick="event.stopPropagation()">
+                <div class="modal-header">
+                    <h2><i class="fas fa-edit"></i> Bulk Rate Update</h2>
+                    <button class="modal-close" onclick="closeModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p>Selected Groups: <strong>${selectedGroups.length}</strong></p>
+                    <div style="margin: 20px 0;">
+                        <label>New Rate:</label>
+                        <input type="number" id="bulkRate" class="rate-input" 
+                               min="1" max="100" placeholder="Enter rate" 
+                               style="width: 100%; margin-top: 10px;">
+                    </div>
+                    <button class="btn-primary" onclick="applyBulkRate(${JSON.stringify(selectedGroups).replace(/"/g, '&quot;')})" 
+                            style="width: 100%;">
+                        <i class="fas fa-check"></i> Update All Groups
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.getElementById('modalContainer').innerHTML = modal;
+}
+
+// Apply Bulk Rate
+async function applyBulkRate(groupIds) {
+    const rate = parseFloat(document.getElementById('bulkRate').value);
+
+    if (!rate || rate < 1 || rate > 100) {
+        showToast('Invalid rate', 'error');
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/groups/bulk-rate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ groupIds, rate })
+        });
+
+        const result = await response.json();
+        
+        if (result.success) {
+            showToast(`${result.count} groups updated`, 'success');
+            closeModal();
+            loadGroups();
+        }
+    } catch (error) {
+        console.error('Error applying bulk rate:', error);
+        showToast('Error updating rates', 'error');
+    }
+}
+
+// Filter Groups
+function filterGroups() {
+    const search = document.getElementById('groupSearch').value.toLowerCase();
+    const cards = document.querySelectorAll('.group-card');
+
+    cards.forEach(card => {
+        const name = card.querySelector('.group-name').textContent.toLowerCase();
+        card.style.display = name.includes(search) ? 'block' : 'none';
+    });
+}
+
+// Load Transactions
+async function loadTransactions() {
+    try {
+        const response = await fetch('/api/transactions');
+        allTransactions = await response.json();
+
+        const tbody = document.getElementById('transactionsTable');
+        
+        if (allTransactions.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="loading">No transactions found</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = allTransactions.slice(0, 50).map(t => `
+            <tr>
+                <td>${t.id.substring(0, 8)}...</td>
+                <td><strong>${t.groupName || t.phone || 'Unknown'}</strong></td>
+                <td>৳${t.amount.toLocaleString()}</td>
+                <td>${t.method}</td>
+                <td><span class="status-badge status-${t.status}">${t.status}</span></td>
+                <td>${new Date(t.date).toLocaleString('bn-BD')}</td>
+            </tr>
+        `).join('');
+
+        // Update recent transactions on dashboard - only manual type
+        const recentTbody = document.getElementById('recentTransactions');
+        const manualTransactions = allTransactions.filter(t => t.type === 'manual');
+        recentTbody.innerHTML = manualTransactions.slice(0, 5).map(t => `
+            <tr>
+                <td>${t.groupName || 'Unknown Group'}</td>
+                <td>৳${t.amount.toLocaleString()}</td>
+                <td>${t.type}</td>
+                <td>${new Date(t.date).toLocaleDateString('bn-BD')}</td>
+            </tr>
+        `).join('');
+        
+        if (manualTransactions.length === 0) {
+            recentTbody.innerHTML = '<tr><td colspan="4" class="loading">No manual transactions found</td></tr>';
+        }
+    } catch (error) {
+        console.error('Error loading transactions:', error);
+    }
+}
+
+// Load Pending Deposits
+async function loadPendingDeposits() {
+    try {
+        const response = await fetch('/api/deposits/pending');
+        const deposits = await response.json();
+
+        const tbody = document.getElementById('pendingDepositsTable');
+        
+        if (deposits.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="loading">No pending deposits</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = deposits.map(d => `
+            <tr>
+                <td>${d.phone}</td>
+                <td>৳${d.amount.toLocaleString()}</td>
+                <td>${d.transactionId}</td>
+                <td>${new Date(d.date).toLocaleString('bn-BD')}</td>
+                <td>
+                    <button class="btn-approve" onclick="approveDeposit('${d.id}')">
+                        <i class="fas fa-check"></i> Approve
+                    </button>
+                    <button class="btn-reject" onclick="rejectDeposit('${d.id}')">
+                        <i class="fas fa-times"></i> Reject
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+    } catch (error) {
+        console.error('Error loading pending deposits:', error);
+    }
+}
+
+// Approve Deposit
+async function approveDeposit(depositId) {
+    if (!confirm('Approve this deposit?')) return;
+
+    try {
+        const response = await fetch(`/api/deposits/${depositId}/approve`, {
+            method: 'POST'
+        });
+
+        const result = await response.json();
+        
+        if (result.success) {
+            showToast('Deposit approved', 'success');
+        }
+    } catch (error) {
+        console.error('Error approving deposit:', error);
+        showToast('Error approving deposit', 'error');
+    }
+}
+
+// Reject Deposit
+async function rejectDeposit(depositId) {
+    if (!confirm('Reject this deposit?')) return;
+
+    try {
+        const response = await fetch(`/api/deposits/${depositId}/reject`, {
+            method: 'POST'
+        });
+
+        const result = await response.json();
+        
+        if (result.success) {
+            showToast('Deposit rejected', 'info');
+        }
+    } catch (error) {
+        console.error('Error rejecting deposit:', error);
+        showToast('Error rejecting deposit', 'error');
+    }
+}
+
+// Load Orders
+async function loadOrders() {
+    try {
+        const response = await fetch('/api/orders');
+        allOrders = await response.json();
+
+        const tbody = document.getElementById('ordersTable');
+        
+        if (allOrders.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="loading">No orders found</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = allOrders.slice(0, 50).map(o => `
+            <tr>
+                <td>${o.phone}</td>
+                <td>${o.playerId}</td>
+                <td>${o.diamonds}</td>
+                <td>৳${o.amount.toLocaleString()}</td>
+                <td><span class="status-badge status-${o.status}">${o.status}</span></td>
+                <td>${new Date(o.date).toLocaleString('bn-BD')}</td>
+            </tr>
+        `).join('');
+    } catch (error) {
+        console.error('Error loading orders:', error);
+    }
+}
+
+// Load Orders for New Orders View
+async function loadOrdersNew() {
+    try {
+        const response = await fetch('/api/orders');
+        allOrders = await response.json();
+
+        const tbody = document.getElementById('ordersTableNew');
+        
+        if (allOrders.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="loading">No orders found</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = allOrders.slice(0, 100).map(o => `
+            <tr>
+                <td data-label="Phone">${o.phone}</td>
+                <td data-label="ID/Number">${o.playerId}</td>
+                <td data-label="Diamonds">${o.diamonds}</td>
+                <td data-label="Amount">৳${o.amount.toLocaleString()}</td>
+                <td data-label="Status"><span class="status-badge status-${o.status}">${o.status}</span></td>
+                <td data-label="Date">${new Date(o.date).toLocaleString('bn-BD')}</td>
+            </tr>
+        `).join('');
+    } catch (error) {
+        console.error('Error loading orders:', error);
+    }
+}
+
+// Load Users
+async function loadUsers() {
+    try {
+        const response = await fetch('/api/users');
+        allUsers = await response.json();
+    } catch (error) {
+        console.error('Error loading users:', error);
+    }
+}
+
+// Load Analytics
+async function loadAnalytics() {
+    try {
+        const response = await fetch('/api/analytics');
+        const data = await response.json();
+
+        console.log('Analytics data received:', data); // DEBUG
+        console.log('Last 7 days:', data.last7Days); // DEBUG
+
+        // Check if there's actual data
+        const hasData = data.last7Days && data.last7Days.some(d => d.deposits > 0 || d.orders > 0);
+        console.log('Has data:', hasData); // DEBUG
+        
+        if (!hasData) {
+            // Show empty state
+            const chartContainer = document.querySelector('.chart-container');
+            if (chartContainer) {
+                chartContainer.innerHTML = `
+                    <div style="
+                        position: absolute;
+                        top: 50%;
+                        left: 50%;
+                        transform: translate(-50%, -50%);
+                        text-align: center;
+                        color: var(--text-secondary);
+                        z-index: 10;
+                    ">
+                        <i class="fas fa-chart-line" style="font-size: 3rem; margin-bottom: 15px; opacity: 0.6; display: block;"></i>
+                        <p style="margin: 10px 0; font-size: 1.1rem; font-weight: 500;">No data for last 7 days</p>
+                        <p style="font-size: 0.9rem; opacity: 0.7; margin: 5px 0;">Data will appear when orders are placed</p>
+                    </div>
+                `;
+            }
+        } else {
+            renderChart(data.last7Days);
+        }
+    } catch (error) {
+        console.error('Error loading analytics:', error);
+    }
+}
+
+// Render Chart
+function renderChart(data) {
+    const ctx = document.getElementById('analyticsChart');
+    if (!ctx) return;
+
+    if (analyticsChart) {
+        analyticsChart.destroy();
+    }
+
+    const isDark = currentTheme === 'dark';
+    const textColor = isDark ? '#eee' : '#2c3e50';
+    const gridColor = isDark ? '#2d3561' : '#e1e8ed';
+
+    analyticsChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: data.map(d => new Date(d.date).toLocaleDateString('bn-BD')),
+            datasets: [
+                {
+                    label: 'Deposits',
+                    data: data.map(d => d.deposits),
+                    borderColor: '#667eea',
+                    backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                    tension: 0.4,
+                    fill: true,
+                    borderWidth: 2
+                },
+                {
+                    label: 'Orders',
+                    data: data.map(d => d.orders),
+                    borderColor: '#43e97b',
+                    backgroundColor: 'rgba(67, 233, 123, 0.1)',
+                    tension: 0.4,
+                    fill: true,
+                    borderWidth: 2
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    labels: { color: textColor },
+                    display: true
+                }
+            },
+            scales: {
+                x: {
+                    ticks: { color: textColor },
+                    grid: { color: gridColor }
+                },
+                y: {
+                    ticks: { color: textColor },
+                    grid: { color: gridColor },
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+}
+
+// Tab Switching
+function switchTab(tabName) {
+    // Update tab buttons
+    document.querySelectorAll('.tab').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    event.target.classList.add('active');
+
+    // Update tab content
+    document.querySelectorAll('.tab-content').forEach(content => {
+        content.classList.remove('active');
+    });
+
+    document.getElementById(tabName + 'Tab').classList.add('active');
+}
+
+// Filter Functions
+function filterTransactions() {
+    const search = document.getElementById('transactionSearch').value.toLowerCase();
+    const rows = document.querySelectorAll('#transactionsTable tr');
+
+    rows.forEach(row => {
+        const text = row.textContent.toLowerCase();
+        row.style.display = text.includes(search) ? '' : 'none';
+    });
+}
+
+function filterOrders() {
+    const search = document.getElementById('orderSearch').value.toLowerCase();
+    const rows = document.querySelectorAll('#ordersTable tr');
+
+    rows.forEach(row => {
+        const text = row.textContent.toLowerCase();
+        row.style.display = text.includes(search) ? '' : 'none';
+    });
+}
+
+// Modal Functions
+function showUsersModal() {
+    fetch('/api/users')
+        .then(res => res.json())
+        .then(users => {
+            const modal = `
+                <div class="modal" onclick="closeModal(event)">
+                    <div class="modal-content large-modal" onclick="event.stopPropagation()">
+                        <div class="modal-header">
+                            <h2><i class="fas fa-users"></i> User Management</h2>
+                            <button class="modal-close" onclick="closeModal()">&times;</button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="search-bar">
+                                <i class="fas fa-search"></i>
+                                <input type="text" id="userSearch" placeholder="Search users..." onkeyup="filterModalTable()">
+                            </div>
+                            <div class="table-wrapper">
+                                <div class="table-container" style="max-height: 500px; overflow-y: auto;">
+                                    <table class="data-table responsive-table">
+                                        <thead>
+                                            <tr>
+                                                <th data-label="Phone">Phone</th>
+                                                <th data-label="Name">Name</th>
+                                                <th data-label="Main Balance">Main Balance</th>
+                                                <th data-label="Due Balance">Due Balance</th>
+                                                <th data-label="Status">Status</th>
+                                                <th data-label="Action">Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="modalTableBody">
+                                            ${users.map(u => `
+                                                <tr>
+                                                    <td data-label="Phone"><span class="phone-number">${u.phone}</span></td>
+                                                    <td data-label="Name">${u.name || 'N/A'}</td>
+                                                    <td data-label="Main Balance"><span class="badge-balance">৳${(u.balance || 0).toLocaleString()}</span></td>
+                                                    <td data-label="Due Balance"><span class="badge-due">৳${(u.dueBalance || 0).toLocaleString()}</span></td>
+                                                    <td data-label="Status"><span class="status-badge status-${u.status}">${u.status}</span></td>
+                                                    <td data-label="Action" class="action-cell">
+                                                        <button class="btn-info" onclick="showEditUserModal('${u.phone}')" style="padding: 5px 10px; font-size: 0.85rem;">
+                                                            <i class="fas fa-edit"></i> Edit
+                                                        </button>
+                                                        <button class="btn-${u.status === 'active' ? 'reject' : 'approve'}" 
+                                                                onclick="toggleUserBlock('${u.phone}')" style="padding: 5px 10px; font-size: 0.85rem;">
+                                                            ${u.status === 'active' ? 'Block' : 'Unblock'}
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            `).join('')}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.getElementById('modalContainer').innerHTML = modal;
+        });
+}
+
+function showEditUserModal(phone) {
+    fetch(`/api/users/${phone}`)
+        .then(res => res.json())
+        .then(user => {
+            const modal = `
+                <div class="modal" onclick="closeModal(event)">
+                    <div class="modal-content edit-modal" onclick="event.stopPropagation()">
+                        <div class="modal-header">
+                            <h2><i class="fas fa-user-edit"></i> Edit User - ${user.name}</h2>
+                            <button class="modal-close" onclick="closeModal()">&times;</button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="form-group">
+                                <label>Phone:</label>
+                                <input type="text" value="${user.phone}" disabled class="form-input">
+                            </div>
+
+                            <div class="form-group">
+                                <label>Name:</label>
+                                <input type="text" id="editUserName" value="${user.name || ''}" placeholder="User name" class="form-input">
+                            </div>
+
+                            <div class="form-group">
+                                <label>Main Balance:</label>
+                                <div class="input-button-group">
+                                    <input type="number" id="editUserBalance" value="${user.balance || 0}" placeholder="0" class="form-input">
+                                    <button onclick="addMainBalance('${phone}', 100)" class="btn-add">+100</button>
+                                    <button onclick="addMainBalance('${phone}', 500)" class="btn-add">+500</button>
+                                    <button onclick="addMainBalance('${phone}', 1000)" class="btn-add">+1K</button>
+                                </div>
+                            </div>
+
+                            <div class="form-group button-group">
+                                <button onclick="saveUserChanges('${phone}')" class="btn-save">
+                                    <i class="fas fa-save"></i> Save Changes
+                                </button>
+                                <button onclick="closeModal()" class="btn-cancel">
+                                    <i class="fas fa-times"></i> Cancel
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.getElementById('modalContainer').innerHTML = modal;
+        })
+        .catch(err => alert('Error loading user: ' + err.message));
+}
+
+function addMainBalance(phone, amount) {
+    const currentValue = parseInt(document.getElementById('editUserBalance').value) || 0;
+    document.getElementById('editUserBalance').value = currentValue + amount;
+}
+
+function saveUserChanges(phone) {
+    const name = document.getElementById('editUserName').value.trim();
+    const balance = parseInt(document.getElementById('editUserBalance').value) || 0;
+
+    if (!name) {
+        alert('Please enter user name');
+        return;
+    }
+
+    fetch(`/api/users/${phone}/update`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, balance })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            alert('User updated successfully!');
+            closeModal();
+            // Wait a moment for DOM to update then refresh modal
+            setTimeout(() => {
+                showUsersModal();
+            }, 300);
+        } else {
+            alert('Error: ' + (data.error || 'Failed to update user'));
+        }
+    })
+    .catch(err => alert('Error: ' + err.message));
+}
+
+async function toggleUserBlock(phone) {
+    try {
+        const response = await fetch(`/api/users/${phone}/toggle-block`, {
+            method: 'POST'
+        });
+        const result = await response.json();
+        
+        if (result.success) {
+            showToast('User status updated', 'success');
+            showUsersModal(); // Refresh modal
+        }
+    } catch (error) {
+        showToast('Error updating user status', 'error');
+    }
+}
+
+function showPaymentNumbersModal() {
+    fetch('/api/payment-numbers')
+        .then(res => res.json())
+        .then(data => {
+            const modal = `
+                <div class="modal" onclick="closeModal(event)">
+                    <div class="modal-content large-modal" onclick="event.stopPropagation()">
+                        <div class="modal-header">
+                            <h2><i class="fas fa-credit-card"></i> Payment Numbers</h2>
+                            <button class="modal-close" onclick="closeModal()">&times;</button>
+                        </div>
+                        <div class="modal-body">
+                            <div style="margin-bottom: 20px;">
+                                <button onclick="showAddPaymentModal()" class="btn-primary" style="padding: 10px 20px; border: none; border-radius: 8px; background: #667eea; color: white; cursor: pointer; font-weight: 600;">
+                                    <i class="fas fa-plus"></i> Add New Payment Number
+                                </button>
+                            </div>
+                            
+                            <div style="display: grid; gap: 20px;">
+                                ${data.paymentNumbers && data.paymentNumbers.length > 0 ? data.paymentNumbers.map((payment, idx) => `
+                                    <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 10px; border-left: 4px solid #667eea;">
+                                        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
+                                            <div>
+                                                <h4 style="margin: 0 0 5px 0; color: #4facfe;">${payment.method}</h4>
+                                                <p style="margin: 0; color: #aaa; font-size: 0.9rem;">
+                                                    ${payment.isBank ? `<strong>Bank Account</strong>` : '<strong>Mobile Payment</strong>'}
+                                                </p>
+                                            </div>
+                                            <div style="display: flex; gap: 8px;">
+                                                <button onclick="deletePaymentNumber(${idx})" style="padding: 6px 12px; background: #f5576c; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem;">
+                                                    <i class="fas fa-trash"></i> Delete
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div style="background: rgba(0,0,0,0.3); padding: 12px; border-radius: 6px; font-family: monospace; font-size: 0.95rem; margin-top: 10px;">
+                                            ${payment.isBank ? `
+                                                <div style="margin-bottom: 8px;">
+                                                    <strong>Account Number:</strong> <span style="color: #43e97b;">${payment.accountNumber}</span>
+                                                </div>
+                                                <div style="margin-bottom: 8px;">
+                                                    <strong>Account Name:</strong> <span>${payment.accountName}</span>
+                                                </div>
+                                                <div style="margin-bottom: 8px;">
+                                                    <strong>Branch:</strong> <span>${payment.branch}</span>
+                                                </div>
+                                                <div>
+                                                    <strong>Type:</strong> <span>${payment.type}</span>
+                                                </div>
+                                            ` : `
+                                                <div>
+                                                    <strong>Number:</strong> <span style="color: #43e97b;">${payment.number}</span>
+                                                </div>
+                                                <div style="margin-top: 5px;">
+                                                    <strong>Type:</strong> <span>${payment.type}</span>
+                                                </div>
+                                            `}
+                                        </div>
+                                    </div>
+                                `).join('') : '<p style="color: #aaa; text-align: center; padding: 20px;">No payment numbers added yet</p>'}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.getElementById('modalContainer').innerHTML = modal;
+        });
+}
+
+function showAddPaymentModal() {
+    const modal = `
+        <div class="modal" onclick="closeModal(event)">
+            <div class="modal-content" onclick="event.stopPropagation()">
+                <div class="modal-header">
+                    <h2><i class="fas fa-plus-circle"></i> Add Payment Number</h2>
+                    <button class="modal-close" onclick="closeModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 8px; font-weight: 600;">Payment Type:</label>
+                        <select id="paymentType" onchange="updatePaymentForm()" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #2d3561; background: #16213e; color: #eee; font-size: 1rem;">
+                            <option value="mobile">Mobile Payment (Bkash, Nagad, Rocket)</option>
+                            <option value="bank">Bank Account</option>
+                        </select>
+                    </div>
+                    
+                    <div id="mobileForm">
+                        <div style="margin-bottom: 15px;">
+                            <label style="display: block; margin-bottom: 8px; font-weight: 600;">Payment Method:</label>
+                            <select id="method" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #2d3561; background: #16213e; color: #eee; font-size: 1rem;">
+                                <option value="Bkash">Bkash</option>
+                                <option value="Nagad">Nagad</option>
+                                <option value="Rocket">Rocket</option>
+                            </select>
+                        </div>
+                        
+                        <div style="margin-bottom: 15px;">
+                            <label style="display: block; margin-bottom: 8px; font-weight: 600;">Phone Number:</label>
+                            <input type="text" id="number" placeholder="01700000000" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #2d3561; background: #16213e; color: #eee; font-size: 1rem; box-sizing: border-box;">
+                        </div>
+                        
+                        <div style="margin-bottom: 15px;">
+                            <label style="display: block; margin-bottom: 8px; font-weight: 600;">Account Type:</label>
+                            <select id="type" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #2d3561; background: #16213e; color: #eee; font-size: 1rem;">
+                                <option value="Personal">Personal</option>
+                                <option value="Agent">Agent</option>
+                                <option value="Merchant">Merchant</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div id="bankForm" style="display: none;">
+                        <div style="margin-bottom: 15px;">
+                            <label style="display: block; margin-bottom: 8px; font-weight: 600;">Bank Name:</label>
+                            <input type="text" id="bankMethod" placeholder="e.g., Islami Bank" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #2d3561; background: #16213e; color: #eee; font-size: 1rem; box-sizing: border-box;">
+                        </div>
+                        
+                        <div style="margin-bottom: 15px;">
+                            <label style="display: block; margin-bottom: 8px; font-weight: 600;">Account Number:</label>
+                            <input type="text" id="accountNumber" placeholder="123456789" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #2d3561; background: #16213e; color: #eee; font-size: 1rem; box-sizing: border-box;">
+                        </div>
+                        
+                        <div style="margin-bottom: 15px;">
+                            <label style="display: block; margin-bottom: 8px; font-weight: 600;">Account Name:</label>
+                            <input type="text" id="accountName" placeholder="e.g., MD Rubel Mia" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #2d3561; background: #16213e; color: #eee; font-size: 1rem; box-sizing: border-box;">
+                        </div>
+                        
+                        <div style="margin-bottom: 15px;">
+                            <label style="display: block; margin-bottom: 8px; font-weight: 600;">Branch:</label>
+                            <input type="text" id="branch" placeholder="e.g., Mymensingh" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #2d3561; background: #16213e; color: #eee; font-size: 1rem; box-sizing: border-box;">
+                        </div>
+                        
+                        <div style="margin-bottom: 15px;">
+                            <label style="display: block; margin-bottom: 8px; font-weight: 600;">Account Type:</label>
+                            <select id="bankType" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #2d3561; background: #16213e; color: #eee; font-size: 1rem;">
+                                <option value="Savings">Savings</option>
+                                <option value="Current">Current</option>
+                                <option value="Business">Business</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 10px; margin-top: 20px;">
+                        <button onclick="savePaymentNumber()" style="flex: 1; padding: 12px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 1rem;">
+                            Save Payment Number
+                        </button>
+                        <button onclick="closeModal()" style="flex: 1; padding: 12px; background: #2d3561; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 1rem;">
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    document.getElementById('modalContainer').innerHTML = modal;
+}
+
+function updatePaymentForm() {
+    const type = document.getElementById('paymentType').value;
+    document.getElementById('mobileForm').style.display = type === 'mobile' ? 'block' : 'none';
+    document.getElementById('bankForm').style.display = type === 'bank' ? 'block' : 'none';
+}
+
+function savePaymentNumber() {
+    const type = document.getElementById('paymentType').value;
+    
+    let payload;
+    if (type === 'mobile') {
+        payload = {
+            method: document.getElementById('method').value,
+            number: document.getElementById('number').value,
+            type: document.getElementById('type').value,
+            isBank: false
+        };
+    } else {
+        payload = {
+            method: document.getElementById('bankMethod').value,
+            number: document.getElementById('accountNumber').value,
+            accountNumber: document.getElementById('accountNumber').value,
+            accountName: document.getElementById('accountName').value,
+            branch: document.getElementById('branch').value,
+            type: document.getElementById('bankType').value,
+            isBank: true
+        };
+    }
+    
+    fetch('/api/payment-numbers/add', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            alert('Payment number added successfully!');
+            closeModal();
+            showPaymentNumbersModal();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    })
+    .catch(err => alert('Error: ' + err.message));
+}
+
+function deletePaymentNumber(idx) {
+    if (confirm('Are you sure you want to delete this payment number?')) {
+        fetch(`/api/payment-numbers/delete/${idx}`, { method: 'DELETE' })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    showPaymentNumbersModal();
+                } else {
+                    alert('Error deleting payment number');
+                }
+            });
+    }
+}
+
+function showWhatsAppAdminModal() {
+    fetch('/api/whatsapp-admins')
+        .then(res => res.json())
+        .then(data => {
+            const admins = data.whatsappAdmins || [];
+            const modal = `
+                <div class="modal" onclick="closeModal(event)">
+                    <div class="modal-content large-modal" onclick="event.stopPropagation()">
+                        <div class="modal-header">
+                            <h2><i class="fab fa-whatsapp"></i> WhatsApp Admins</h2>
+                            <button class="modal-close" onclick="closeModal()">&times;</button>
+                        </div>
+                        <div class="modal-body">
+                            <div style="margin-bottom: 20px;">
+                                <button onclick="showAddWhatsAppAdminModal()" class="btn-primary" style="padding: 10px 20px; border: none; border-radius: 8px; background: #25d366; color: white; cursor: pointer; font-weight: 600;">
+                                    <i class="fas fa-plus"></i> Add New Admin
+                                </button>
+                            </div>
+                            
+                            <div style="display: grid; gap: 15px;">
+                                ${admins && admins.length > 0 ? admins.map((admin, idx) => `
+                                    <div style="background: rgba(37, 211, 102, 0.1); padding: 15px; border-radius: 10px; border-left: 4px solid #25d366;">
+                                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                                            <div>
+                                                <div style="font-size: 1.1rem; font-weight: 600; color: #25d366;">
+                                                    <i class="fas fa-phone"></i> ${admin.phone}
+                                                </div>
+                                                <p style="margin: 5px 0 0 0; color: #aaa; font-size: 0.9rem;">
+                                                    Added: ${new Date(admin.addedAt).toLocaleDateString('en-US', {year: 'numeric', month: 'short', day: 'numeric'})}
+                                                </p>
+                                            </div>
+                                            <button onclick="deleteWhatsAppAdmin(${idx})" style="padding: 6px 12px; background: #f5576c; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem;">
+                                                <i class="fas fa-trash"></i> Remove
+                                            </button>
+                                        </div>
+                                    </div>
+                                `).join('') : '<p style="color: #aaa; text-align: center; padding: 20px;">No WhatsApp admins added yet</p>'}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.getElementById('modalContainer').innerHTML = modal;
+        })
+        .catch(err => {
+            alert('Error loading WhatsApp admins: ' + err.message);
+        });
+}
+
+function showAddWhatsAppAdminModal() {
+    const modal = `
+        <div class="modal" onclick="closeModal(event)">
+            <div class="modal-content" onclick="event.stopPropagation()">
+                <div class="modal-header">
+                    <h2><i class="fab fa-whatsapp"></i> Add WhatsApp Admin</h2>
+                    <button class="modal-close" onclick="closeModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 8px; font-weight: 600;">Country Code:</label>
+                        <select id="countryCode" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #2d3561; background: #16213e; color: #eee; font-size: 1rem; box-sizing: border-box;">
+                            <option value="880">🇧🇩 Bangladesh (+880)</option>
+                            <option value="91">🇮🇳 India (+91)</option>
+                            <option value="92">🇵🇰 Pakistan (+92)</option>
+                            <option value="886">🇹🇼 Taiwan (+886)</option>
+                            <option value="1">🇺🇸 USA/Canada (+1)</option>
+                            <option value="44">🇬🇧 UK (+44)</option>
+                        </select>
+                    </div>
+
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 8px; font-weight: 600;">Phone Number:</label>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <span style="background: #2d3561; padding: 10px 12px; border-radius: 6px; border: 1px solid #2d3561; color: #aaa; font-weight: 600; min-width: 60px;">
+                                +<span id="selectedCountryCode">880</span>
+                            </span>
+                            <input type="text" id="adminPhone" placeholder="e.g., 1700000000 or 17-0000-0000" style="flex: 1; padding: 10px; border-radius: 6px; border: 1px solid #2d3561; background: #16213e; color: #eee; font-size: 1rem; box-sizing: border-box;">
+                        </div>
+                        <p style="color: #aaa; font-size: 0.85rem; margin-top: 5px;">Enter number without country code (e.g., 1700000000)</p>
+                    </div>
+                    
+                    <div style="background: rgba(37, 211, 102, 0.1); padding: 12px; border-radius: 6px; border-left: 3px solid #25d366; margin-bottom: 20px;">
+                        <p style="margin: 0; color: #aaa; font-size: 0.9rem;">
+                            <i class="fas fa-info-circle"></i> This admin will have special WhatsApp permissions for managing orders and group notifications.
+                        </p>
+                    </div>
+                    
+                    <div style="display: flex; gap: 10px;">
+                        <button onclick="saveWhatsAppAdmin()" style="flex: 1; padding: 12px; background: #25d366; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 1rem;">
+                            Add Admin
+                        </button>
+                        <button onclick="closeModal()" style="flex: 1; padding: 12px; background: #2d3561; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 1rem;">
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    document.getElementById('modalContainer').innerHTML = modal;
+    
+    // Update country code display when changed
+    document.getElementById('countryCode').addEventListener('change', function() {
+        document.getElementById('selectedCountryCode').textContent = this.value;
+    });
+}
+
+function saveWhatsAppAdmin() {
+    const countryCode = document.getElementById('countryCode').value.trim();
+    const phoneNumber = document.getElementById('adminPhone').value.trim();
+    
+    if (!phoneNumber) {
+        alert('Please enter a phone number');
+        return;
+    }
+    
+    // Remove any special characters or spaces from phone number
+    const cleanedPhone = phoneNumber.replace(/[-\s]/g, '');
+    
+    // Combine country code and phone number
+    const fullPhone = countryCode + cleanedPhone;
+    
+    fetch('/api/whatsapp-admins/add', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: fullPhone })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            alert('WhatsApp admin added successfully!');
+            closeModal();
+            showWhatsAppAdminModal();
+        } else {
+            alert('Error: ' + (data.error || 'Failed to add admin'));
+        }
+    })
+    .catch(err => alert('Error: ' + err.message));
+}
+
+function deleteWhatsAppAdmin(idx) {
+    if (confirm('Are you sure you want to remove this WhatsApp admin?')) {
+        fetch(`/api/whatsapp-admins/delete/${idx}`, { method: 'DELETE' })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    showWhatsAppAdminModal();
+                } else {
+                    alert('Error deleting admin');
+                }
+            })
+            .catch(err => alert('Error: ' + err.message));
+    }
+}
+
+function showAdminLogsModal() {
+    fetch('/api/admin-logs')
+        .then(res => res.json())
+        .then(logs => {
+            const modal = `
+                <div class="modal" onclick="closeModal(event)">
+                    <div class="modal-content" onclick="event.stopPropagation()">
+                        <div class="modal-header">
+                            <h2><i class="fas fa-clipboard-list"></i> Admin Logs</h2>
+                            <button class="modal-close" onclick="closeModal()">&times;</button>
+                        </div>
+                        <div class="modal-body">
+                            <div style="max-height: 400px; overflow-y: auto; font-family: monospace; font-size: 0.9rem;">
+                                ${logs.map(log => `<div style="margin-bottom: 5px;">${log}</div>`).join('')}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.getElementById('modalContainer').innerHTML = modal;
+        });
+}
+
+function showAnalyticsModal() {
+    fetch('/api/analytics')
+        .then(res => res.json())
+        .then(data => {
+            const modal = `
+                <div class="modal" onclick="closeModal(event)">
+                    <div class="modal-content" onclick="event.stopPropagation()">
+                        <div class="modal-header">
+                            <h2><i class="fas fa-chart-pie"></i> Advanced Analytics</h2>
+                            <button class="modal-close" onclick="closeModal()">&times;</button>
+                        </div>
+                        <div class="modal-body">
+                            <h3>Last 7 Days Performance</h3>
+                            <div class="chart-container" style="height: 300px;">
+                                <canvas id="modalAnalyticsChart"></canvas>
+                            </div>
+                            <div style="margin-top: 20px;">
+                                <h4>Summary</h4>
+                                <p>Total Deposits: ৳${data.last7Days.reduce((sum, d) => sum + d.deposits, 0).toLocaleString()}</p>
+                                <p>Total Orders: ${data.last7Days.reduce((sum, d) => sum + d.orders, 0)}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.getElementById('modalContainer').innerHTML = modal;
+            
+            // Render chart in modal
+            const ctx = document.getElementById('modalAnalyticsChart');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: data.last7Days.map(d => new Date(d.date).toLocaleDateString('bn-BD')),
+                    datasets: [
+                        {
+                            label: 'Deposits',
+                            data: data.last7Days.map(d => d.deposits),
+                            backgroundColor: 'rgba(102, 126, 234, 0.5)',
+                        },
+                        {
+                            label: 'Orders',
+                            data: data.last7Days.map(d => d.orders),
+                            backgroundColor: 'rgba(67, 233, 123, 0.5)',
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false
+                }
+            });
+        });
+}
+
+function showSettingsModal() {
+    const modal = `
+        <div class="modal" onclick="closeModal(event)">
+            <div class="modal-content" onclick="event.stopPropagation()">
+                <div class="modal-header">
+                    <h2><i class="fas fa-cog"></i> Settings</h2>
+                    <button class="modal-close" onclick="closeModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <h3>Appearance</h3>
+                    <div style="margin: 15px 0;">
+                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                            <input type="checkbox" ${currentTheme === 'light' ? 'checked' : ''} 
+                                   onchange="toggleThemeFromSettings()" id="themeCheckbox">
+                            <span>Light Mode</span>
+                        </label>
+                    </div>
+                    
+                    <h3 style="margin-top: 25px;">Language</h3>
+                    <div style="margin: 15px 0;">
+                        <select onchange="changeLanguage(this.value)" style="width: 100%; padding: 10px; border-radius: 8px; background: var(--dark-bg); color: var(--text-primary); border: 1px solid var(--border-color);">
+                            <option value="bn" ${currentLang === 'bn' ? 'selected' : ''}>Bangla</option>
+                            <option value="en" ${currentLang === 'en' ? 'selected' : ''}>English</option>
+                        </select>
+                    </div>
+                    
+                    <h3 style="margin-top: 25px;">Notifications</h3>
+                    <div style="margin: 15px 0;">
+                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                            <input type="checkbox" checked>
+                            <span>Enable Desktop Notifications</span>
+                        </label>
+                    </div>
+                    
+                    <h3 style="margin-top: 25px;">Auto-Refresh</h3>
+                    <div style="margin: 15px 0;">
+                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                            <input type="checkbox" checked>
+                            <span>Auto-refresh every 30 seconds</span>
+                        </label>
+                    </div>
+                    
+                    <button class="btn-primary" onclick="closeModal()" style="width: 100%; margin-top: 20px;">
+                        <i class="fas fa-save"></i> Save Settings
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    document.getElementById('modalContainer').innerHTML = modal;
+}
+
+// Approve Message Modal
+async function showApproveMessageModal() {
+    try {
+        const response = await fetch('/api/diamond-status');
+        const status = await response.json();
+        const isEnabled = status.approveMessageEnabled !== false;
+        
+        const modal = `
+            <div class="modal" onclick="closeModal(event)">
+                <div class="modal-content" onclick="event.stopPropagation()" style="max-width: 400px;">
+                    <div class="modal-header">
+                        <h2><i class="fas fa-bell"></i> Approve Messages</h2>
+                        <button class="modal-close" onclick="closeModal()">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <p style="margin-bottom: 20px; color: var(--text-secondary);">
+                            When enabled, approval messages will be sent to WhatsApp groups. When disabled, orders will be processed silently without notifications.
+                        </p>
+                        
+                        <div style="background: var(--card-bg); padding: 20px; border-radius: 10px; text-align: center; margin: 20px 0;">
+                            <div style="font-size: 48px; margin-bottom: 10px;">
+                                ${isEnabled ? '🔔' : '🔇'}
+                            </div>
+                            <h3 style="margin: 10px 0;">
+                                ${isEnabled ? 'Messages: ON' : 'Messages: OFF'}
+                            </h3>
+                            <p style="color: var(--text-secondary); font-size: 12px;">
+                                ${isEnabled ? 'Approval notifications are being sent' : 'Approval notifications are silenced'}
+                            </p>
+                        </div>
+                        
+                        <div style="display: flex; gap: 10px; margin-top: 20px;">
+                            <button class="btn-primary" onclick="toggleApproveMessage()" style="flex: 1;">
+                                <i class="fas fa-${isEnabled ? 'volume-mute' : 'volume-up'}"></i>
+                                ${isEnabled ? 'Turn OFF' : 'Turn ON'}
+                            </button>
+                        </div>
+                        
+                        <hr style="margin: 20px 0; border: none; border-top: 1px solid var(--border-color);">
+                        
+                        <div style="background: rgba(79, 172, 254, 0.1); padding: 15px; border-radius: 8px; border-left: 4px solid #4facfe;">
+                            <p style="font-size: 12px; color: var(--text-secondary);">
+                                <i class="fas fa-info-circle"></i> 
+                                <strong>Note:</strong> Users can always see deductions via /d command regardless of this setting.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.getElementById('modalContainer').innerHTML = modal;
+    } catch (error) {
+        console.error('Error loading approve message status:', error);
+        showToast('Error loading settings', 'error');
+    }
+}
+
+// Toggle approve message
+async function toggleApproveMessage() {
+    try {
+        const response = await fetch('/api/diamond-status');
+        const status = await response.json();
+        const newState = !status.approveMessageEnabled;
+        
+        const toggleResponse = await fetch('/api/approve-message/toggle', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ approveMessageEnabled: newState })
+        });
+        
+        const result = await toggleResponse.json();
+        if (result.success) {
+            showToast(`Approve messages turned ${newState ? 'ON' : 'OFF'}`, 'success');
+            showApproveMessageModal();
+        }
+    } catch (error) {
+        console.error('Error toggling approve message:', error);
+        showToast('Error updating setting', 'error');
+    }
+}
+
+function toggleThemeFromSettings() {
+    document.getElementById('themeToggle').click();
+}
+
+function changeLanguage(lang) {
+    currentLang = lang;
+    showToast('Language changed', 'success');
+}
+
+function showBackupModal() {
+    const modal = `
+        <div class="modal" onclick="closeModal(event)">
+            <div class="modal-content" onclick="event.stopPropagation()">
+                <div class="modal-header">
+                    <h2><i class="fas fa-database"></i> Backup & Restore</h2>
+                    <button class="modal-close" onclick="closeModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <h3>Database Backup</h3>
+                    <p>Current backup options:</p>
+                    <div style="margin: 20px 0;">
+                        <button class="btn-primary" onclick="createBackup()" style="width: 100%; margin-bottom: 10px;">
+                            <i class="fas fa-download"></i> Download Database Backup
+                        </button>
+                        <button class="btn-primary" onclick="downloadLogs()" style="width: 100%; background: #4facfe;">
+                            <i class="fas fa-file-download"></i> Download Logs
+                        </button>
+                    </div>
+                    <div style="padding: 15px; background: var(--border-color); border-radius: 8px;">
+                        <p style="margin: 0; font-size: 0.9rem;">
+                            <i class="fas fa-info-circle"></i> Backups include all users, transactions, and group data.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    document.getElementById('modalContainer').innerHTML = modal;
+}
+
+function createBackup() {
+    fetch('/api/backup')
+        .then(res => res.blob())
+        .then(blob => {
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `backup-${new Date().toISOString().split('T')[0]}.json`;
+            a.click();
+            showToast('Backup downloaded successfully!', 'success');
+        })
+        .catch(err => {
+            showToast('Error creating backup', 'error');
+        });
+}
+
+function downloadLogs() {
+    fetch('/api/admin-logs')
+        .then(res => res.json())
+        .then(logs => {
+            const blob = new Blob([logs.join('\n')], { type: 'text/plain' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `admin-logs-${new Date().toISOString().split('T')[0]}.txt`;
+            a.click();
+            showToast('Logs downloaded successfully!', 'success');
+        });
+}
+
+function showClearDataModal() {
+    const modal = `
+        <div class="modal" onclick="closeModal(event)">
+            <div class="modal-content" onclick="event.stopPropagation()">
+                <div class="modal-header">
+                    <h2><i class="fas fa-exclamation-triangle" style="color: #f5576c;"></i> Clear All Data</h2>
+                    <button class="modal-close" onclick="closeModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div style="background: rgba(245, 87, 108, 0.15); border-left: 4px solid #f5576c; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                        <h4 style="color: #f5576c; margin: 0 0 10px 0;">⚠️ Warning</h4>
+                        <p style="margin: 0; color: #aaa;">
+                            এই অ্যাকশন সব ডাটা (ইউজার, ট্রানজ্যাকশন, অর্ডার, ইত্যাদি) ডিলিট করবে। এটি শুধুমাত্র সঠিক PIN দিয়ে করা যায়।
+                        </p>
+                    </div>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <label style="display: block; margin-bottom: 8px; font-weight: 600;">Admin PIN:</label>
+                        <input type="password" id="clearDataPin" placeholder="Enter your admin PIN" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #2d3561; background: #16213e; color: #eee; font-size: 1rem; box-sizing: border-box; letter-spacing: 2px;">
+                    </div>
+                    
+                    <div style="display: flex; gap: 10px; margin-top: 20px;">
+                        <button onclick="clearAllData()" style="flex: 1; padding: 12px; background: #f5576c; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 1rem;">
+                            <i class="fas fa-trash-alt"></i> Clear All Data
+                        </button>
+                        <button onclick="closeModal()" style="flex: 1; padding: 12px; background: #2d3561; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 1rem;">
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    document.getElementById('modalContainer').innerHTML = modal;
+    document.getElementById('clearDataPin').focus();
+}
+
+function clearAllData() {
+    const pin = document.getElementById('clearDataPin').value;
+    
+    if (!pin) {
+        alert('Please enter PIN');
+        return;
+    }
+    
+    if (!confirm('Are you sure you want to delete ALL data? This cannot be undone.\n\nPlease enter PIN to confirm.')) {
+        return;
+    }
+    
+    fetch('/api/clear-all-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            // Clear localStorage and global variables
+            localStorage.clear();
+            allGroups = [];
+            allTransactions = [];
+            allOrders = [];
+            allUsers = [];
+            expandedGroups.clear();
+            selectedGroups.clear();
+            groupsMarkedForDueReminder.clear();
+            
+            // Clear all DOM elements that display data
+            const autoDeductList = document.getElementById('autoDeductList');
+            if (autoDeductList) autoDeductList.innerHTML = '<div class="auto-deduct-placeholder"><i class="fas fa-inbox"></i><p>No auto-deductions yet</p></div>';
+            
+            const groupsContainer = document.getElementById('groupsContainer');
+            if (groupsContainer) groupsContainer.innerHTML = '<p style="text-align: center; color: #aaa;">Loading groups...</p>';
+            
+            const dashboardStatsTop = document.querySelector('.dashboard-stats-top');
+            if (dashboardStatsTop) {
+                dashboardStatsTop.querySelectorAll('.stat-card').forEach(card => {
+                    card.querySelector('.stat-value').textContent = '৳0';
+                    card.querySelector('.stat-change').textContent = '+0%';
+                });
+            }
+            
+            alert('✅ All data cleared successfully! Page will reload...');
+            closeModal();
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            alert('❌ Error: ' + data.error);
+        }
+    })
+    .catch(err => alert('Error: ' + err.message));
+}
+
+function showBotConnectionModal() {
+    const modal = `
+        <div class="modal" onclick="closeModal(event)">
+            <div class="modal-content" onclick="event.stopPropagation()">
+                <div class="modal-header">
+                    <h2><i class="fas fa-robot"></i> WhatsApp Bot Connection</h2>
+                    <button class="modal-close" onclick="closeModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div style="margin-bottom: 20px;">
+                        <div id="botStatusDiv" style="text-align: center; padding: 20px; border-radius: 10px; background: rgba(79, 172, 254, 0.1); border: 2px solid #4facfe; margin-bottom: 20px;">
+                            <div id="botStatus" style="font-size: 1.5rem; font-weight: 600; color: #4facfe; margin-bottom: 10px;">
+                                ⏳ Checking...
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="qrCodeContainer" style="text-align: center; margin-bottom: 20px; display: none;">
+                        <h4 style="margin-bottom: 15px; color: #aaa;">Scan with WhatsApp to Connect:</h4>
+                        <div id="qrCode" style="background: white; padding: 20px; border-radius: 10px; display: inline-block;">
+                            <img src="" id="qrCodeImage" style="width: 300px; height: 300px; display: none;">
+                            <div id="qrLoadingText" style="color: #666; font-weight: 600;">Loading QR Code...</div>
+                        </div>
+                    </div>
+                    
+                    <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px; border-left: 4px solid #4facfe; margin-top: 20px;">
+                        <h4 style="margin-bottom: 10px; color: #4facfe;">📱 Connection Instructions:</h4>
+                        <ol style="margin-left: 20px; color: #aaa; line-height: 1.8;">
+                            <li>If disconnected, a QR code will appear above</li>
+                            <li>Open WhatsApp on your phone</li>
+                            <li>Go to Settings → Linked Devices</li>
+                            <li>Tap "Link a device"</li>
+                            <li>Scan the QR code shown above</li>
+                            <li>Wait for the connection to establish</li>
+                        </ol>
+                    </div>
+                    
+                    <div style="display: flex; gap: 10px; margin-top: 20px;">
+                        <button onclick="checkBotStatus()" style="flex: 1; padding: 12px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                            <i class="fas fa-refresh"></i> Check Status
+                        </button>
+                        <button onclick="closeModal()" style="flex: 1; padding: 12px; background: #2d3561; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                            Close
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    document.getElementById('modalContainer').innerHTML = modal;
+    checkBotStatus();
+}
+
+function checkBotStatus() {
+    fetch('http://localhost:3001/api/bot-status')
+        .then(res => res.json())
+        .then(data => {
+            console.log('Bot Status Response:', data);
+            const statusDiv = document.getElementById('botStatusDiv');
+            const statusText = document.getElementById('botStatus');
+            const qrContainer = document.getElementById('qrCodeContainer');
+            
+            if (data.isConnected) {
+                // Connected
+                statusDiv.style.background = 'rgba(67, 233, 123, 0.1)';
+                statusDiv.style.borderColor = '#43e97b';
+                statusText.innerHTML = '✅ <span style="color: #43e97b;">CONNECTED</span><br><span style="font-size: 0.8rem; color: #aaa; margin-top: 5px; display: block;">Bot is ready to receive messages</span>';
+                qrContainer.style.display = 'none';
+            } else {
+                // Disconnected
+                statusDiv.style.background = 'rgba(245, 87, 108, 0.1)';
+                statusDiv.style.borderColor = '#f5576c';
+                statusText.innerHTML = '❌ <span style="color: #f5576c;">DISCONNECTED</span><br><span style="font-size: 0.8rem; color: #aaa; margin-top: 5px; display: block;">Please connect by scanning QR code below</span>';
+                
+                qrContainer.style.display = 'block';
+                const qrImg = document.getElementById('qrCodeImage');
+                const qrLoading = document.getElementById('qrLoadingText');
+                
+                // Fetch and show QR code
+                if (data.qrCode) {
+                    console.log('QR Code received');
+                    qrImg.src = data.qrCode;
+                    qrImg.style.display = 'block';
+                    qrLoading.style.display = 'none';
+                } else {
+                    console.log('No QR code data');
+                    qrLoading.textContent = 'Waiting for QR code... Please wait a moment';
+                    // Auto-refresh every 2 seconds when disconnected
+                    setTimeout(() => {
+                        const checkBtn = document.querySelector('button[onclick="checkBotStatus()"]');
+                        if (checkBtn && qrContainer.style.display !== 'none') {
+                            checkBotStatus();
+                        }
+                    }, 2000);
+                }
+            }
+        })
+        .catch(err => {
+            console.error('Bot Status Error:', err);
+            const statusDiv = document.getElementById('botStatusDiv');
+            const statusText = document.getElementById('botStatus');
+            statusDiv.style.background = 'rgba(254, 202, 87, 0.1)';
+            statusDiv.style.borderColor = '#feca57';
+            statusText.innerHTML = '⚠️ <span style="color: #feca57;">ERROR</span><br><span style="font-size: 0.8rem; color: #aaa; margin-top: 5px; display: block;">Could not connect to bot API</span>';
+        });
+}
+
+function showDueReminderModal() {
+    // Get groups with due > 0 using totalDue from API
+    const groupsWithDue = allGroups.filter(group => {
+        return group.totalDue > 0;
+    });
+    
+    if (groupsWithDue.length === 0) {
+        showToast('No groups with due amount found', 'warning');
+        return;
+    }
+    
+    const modal = `
+        <div class="modal" onclick="closeModal(event)">
+            <div class="modal-content" onclick="event.stopPropagation()">
+                <div class="modal-header">
+                    <h2><i class="fas fa-bell"></i> Send Due Reminders</h2>
+                    <button class="modal-close" onclick="closeModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div style="background: rgba(67, 233, 123, 0.1); border-left: 4px solid #43e97b; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                        <h4 style="color: #43e97b; margin: 0 0 10px 0;">📢 Due Reminder Service</h4>
+                        <p style="margin: 0; color: #aaa; font-size: 0.95rem;">
+                            Send WhatsApp reminders to selected groups about their pending dues. Only groups with outstanding dues will receive messages.
+                        </p>
+                    </div>
+                    
+                    <div style="max-height: 400px; overflow-y: auto; margin-bottom: 20px; background: rgba(255,255,255,0.02); padding: 10px; border-radius: 8px;">
+                        ${groupsWithDue.map(group => `
+                            <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: rgba(255,255,255,0.05); margin-bottom: 10px; border-radius: 8px; border-left: 3px solid #43e97b;">
+                                <input type="checkbox" 
+                                       class="reminder-checkbox" 
+                                       value="${group.id}" 
+                                       ${groupsMarkedForDueReminder.has(group.id) ? 'checked' : ''} 
+                                       style="width: 20px; height: 20px; cursor: pointer;">
+                                <div style="flex: 1;">
+                                    <div style="font-weight: 600; color: #eee; margin-bottom: 4px;">${group.name}</div>
+                                    <div style="font-size: 0.85rem; color: #aaa;">
+                                        💰 Due: ৳${group.totalDue.toLocaleString()} | Members: ${group.totalUsers}
+                                    </div>
+                                </div>
+                                ${groupsMarkedForDueReminder.has(group.id) ? '<i class="fas fa-check-circle" style="color: #43e97b; font-size: 1.2rem;"></i>' : ''}
+                            </div>
+                        `).join('')}
+                    </div>
+                    
+                    <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px; border-left: 4px solid #4facfe; margin-bottom: 20px;">
+                        <h4 style="margin: 0 0 10px 0; color: #4facfe;">📝 Message Preview:</h4>
+                        <div style="background: rgba(0,0,0,0.3); padding: 12px; border-radius: 6px; font-size: 0.9rem; color: #bbb; font-family: monospace; line-height: 1.6; white-space: pre-wrap;">
+🔔 *দয়া করে মনোযোগ দিন* 🔔
+
+[Group Name] গ্রুপের জন্য বকেয়া টাকা পরিশোধের অনুরোধ।
+
+💰 *বকেয়া পরিমাণ:* ৳[Amount]
+
+📱 *পেমেন্ট নম্বর:*
+
+🏦 Bkash (Personal): 01721016186
+🏦 Nagad (Agent): 01721016186
+🏦 Rocket (Personal): 01721016186
+🏦 Islamic Bank: 324623894746
+   (md rubel mia - Mymensingh)
+
+✅ পেমেন্ট করার পর স্ক্রিনশট পাঠান।
+
+অনুগ্রহ করে যত তাড়াতাড়ি সম্ভব পরিশোধ করুন।
+
+ধন্যবাদ!
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 10px;">
+                        <button onclick="sendDueReminders()" style="flex: 1; padding: 14px; background: linear-gradient(135deg, #43e97b 0%, #38ada9 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 1rem; transition: all 0.3s ease;"
+                                onmouseover="this.style.transform='scale(1.02)'" 
+                                onmouseout="this.style.transform='scale(1)'">
+                            <i class="fas fa-send"></i> Send Reminders
+                        </button>
+                        <button onclick="closeModal()" style="flex: 1; padding: 14px; background: #2d3561; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 1rem;">
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.getElementById('modalContainer').innerHTML = modal;
+    
+    // Add event listeners to checkboxes
+    document.querySelectorAll('.reminder-checkbox').forEach(checkbox => {
+        checkbox.addEventListener('change', (e) => {
+            if (e.target.checked) {
+                groupsMarkedForDueReminder.add(e.target.value);
+            } else {
+                groupsMarkedForDueReminder.delete(e.target.value);
+            }
+        });
+    });
+}
+
+function sendDueReminders() {
+    if (groupsMarkedForDueReminder.size === 0) {
+        alert('Please select at least one group to send reminders');
+        return;
+    }
+    
+    if (!confirm(`Send due reminders to ${groupsMarkedForDueReminder.size} group(s)? Messages will be sent via WhatsApp.`)) {
+        return;
+    }
+    
+    // Show loading state
+    const button = event.target;
+    const originalText = button.innerHTML;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+    button.disabled = true;
+    
+    fetch('/api/send-due-reminders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            groupIds: Array.from(groupsMarkedForDueReminder)
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        button.innerHTML = originalText;
+        button.disabled = false;
+        
+        if (data.success) {
+            const results = data.results;
+            const successCount = results.filter(r => r.success).length;
+            const failedCount = results.filter(r => !r.success).length;
+            
+            let message = `✅ Reminders Sent!\n\n`;
+            message += `Successfully sent: ${successCount}\n`;
+            if (failedCount > 0) {
+                message += `Failed: ${failedCount}\n`;
+                results.filter(r => !r.success).forEach(r => {
+                    message += `  • ${r.groupName || r.groupId}: ${r.reason}\n`;
+                });
+            }
+            
+            alert(message);
+            showToast('Due reminders sent successfully!', 'success');
+            closeModal();
+        } else {
+            alert('Error: ' + data.error);
+            showToast('Failed to send reminders', 'error');
+        }
+    })
+    .catch(err => {
+        button.innerHTML = originalText;
+        button.disabled = false;
+        alert('Error: ' + err.message);
+        showToast('Error sending reminders', 'error');
+    });
+}
+
+function showAboutModal() {
+    const modal = `
+        <div class="modal" onclick="closeModal(event)">
+            <div class="modal-content" onclick="event.stopPropagation()">
+                <div class="modal-header">
+                    <h2><i class="fas fa-info-circle"></i> About</h2>
+                    <button class="modal-close" onclick="closeModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <h3>Diamond Bot Admin Panel</h3>
+                    <p>Version: 1.0.0</p>
+                    <p>Professional WhatsApp Bot Management System</p>
+                    <p>Real-time monitoring and control</p>
+                </div>
+            </div>
+        </div>
+    `;
+    document.getElementById('modalContainer').innerHTML = modal;
+}
+
+function filterModalTable() {
+    const search = document.getElementById('userSearch').value.toLowerCase();
+    const rows = document.querySelectorAll('#modalTableBody tr');
+
+    rows.forEach(row => {
+        const text = row.textContent.toLowerCase();
+        row.style.display = text.includes(search) ? '' : 'none';
+    });
+}
+
+function closeModal(event) {
+    if (!event || event.target.classList.contains('modal')) {
+        document.getElementById('modalContainer').innerHTML = '';
+    }
+}
+
+// Export Functions
+function exportData() {
+    const currentView = document.querySelector('.view.active').id;
+    let data = [];
+    let filename = 'export';
+    
+    if (currentView === 'transactionsView') {
+        data = allTransactions;
+        filename = 'transactions';
+    } else if (currentView === 'groupsView') {
+        data = allGroups;
+        filename = 'groups';
+    } else if (currentView === 'dashboardView') {
+        data = allTransactions.slice(0, 10);
+        filename = 'recent-transactions';
+    }
+    
+    if (data.length === 0) {
+        showToast('No data to export', 'warning');
+        return;
+    }
+    
+    // Convert to CSV
+    const headers = Object.keys(data[0]);
+    const csv = [
+        headers.join(','),
+        ...data.map(row => headers.map(header => JSON.stringify(row[header] || '')).join(','))
+    ].join('\n');
+    
+    // Download
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${filename}-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    
+    showToast('Data exported successfully!', 'success');
+}
+
+function exportAllData() {
+    const allData = {
+        groups: allGroups,
+        transactions: allTransactions,
+        orders: allOrders,
+        users: allUsers,
+        exportDate: new Date().toISOString()
+    };
+    
+    const blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `complete-export-${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    
+    showToast('All data exported successfully!', 'success');
+}
+
+// Toast Notifications
+function showToast(message, type = 'info') {
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : type === 'warning' ? 'exclamation-triangle' : 'info-circle'}"></i>
+            <span>${message}</span>
+        </div>
+    `;
+
+    document.getElementById('toastContainer').appendChild(toast);
+
+    setTimeout(() => {
+        toast.style.animation = 'slideIn 0.3s ease reverse';
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
+// Load Dashboard Data
+async function loadDashboardData() {
+    await Promise.all([
+        loadStats(),
+        loadLastAutoDeduction(),
+        loadTransactions(),
+        loadAnalytics()
+    ]);
+}
+
+// Auto-refresh every 30 seconds (silent)
+setInterval(() => {
+    silentRefreshData(); // Silent refresh without toast
+}, 30000);
+
+// Due Reminder Toggle - Toggle mark for due reminder
+function toggleDueReminder(groupId) {
+    if (groupsMarkedForDueReminder.has(groupId)) {
+        groupsMarkedForDueReminder.delete(groupId);
+    } else {
+        groupsMarkedForDueReminder.add(groupId);
+    }
+    
+    // Update the visual indicator
+    const reminderBtn = document.querySelector(`[data-group-id="${groupId}"] .reminder-toggle-btn`);
+    if (reminderBtn) {
+        if (groupsMarkedForDueReminder.has(groupId)) {
+            reminderBtn.classList.add('active');
+            reminderBtn.style.color = '#ff6b6b';
+        } else {
+            reminderBtn.classList.remove('active');
+            reminderBtn.style.color = '#666';
+        }
+    }
+}

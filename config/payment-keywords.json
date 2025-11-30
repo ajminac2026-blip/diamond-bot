@@ -1,0 +1,51 @@
+{
+  "methods": {
+    "bkash": {
+      "keywords": [
+        "bkash",
+        "বিকাশ",
+        "bk"
+      ],
+      "response": "💰 *Bkash Payment Number*\n\n{paymentNumbers}\n\n✅ পেমেন্ট করার পর স্ক্রিনশট পাঠান।"
+    },
+    "nagad": {
+      "keywords": [
+        "nagad",
+        "নগদ",
+        "ng"
+      ],
+      "response": "💰 *Nagad Payment Number*\n\n{paymentNumbers}\n\n✅ পেমেন্ট করার পর স্ক্রিনশট পাঠান।"
+    },
+    "rocket": {
+      "keywords": [
+        "rocket",
+        "রকেট",
+        "rkt"
+      ],
+      "response": "💰 *Rocket Payment Number*\n\n{paymentNumbers}\n\n✅ পেমেন্ট করার পর স্ক্রিনশট পাঠান।"
+    },
+    "bank": {
+      "keywords": [
+        "bank",
+        "ব্যাংক",
+        "ব্যাঙ্ক",
+        "account",
+        "একাউন্ট",
+        "bnk hobe?"
+      ],
+      "response": "💰 *Bank Payment Information*\n\n{paymentNumbers}\n\n✅ পেমেন্ট করার পর স্ক্রিনশট পাঠান।"
+    },
+    "all": {
+      "keywords": [
+        "payment",
+        "পেমেন্ট",
+        "number",
+        "নাম্বার",
+        "pay",
+        "টাকা"
+      ],
+      "response": "💳 *Payment Information:*\n\n{paymentNumbers}\n\n📝 *How to send payment:*\n1. Send money to any number above\n2. Take screenshot of transaction\n3. Send screenshot here\n4. Wait for confirmation\n\n⚠️ *Important:* Always include transaction ID/reference number"
+    }
+  },
+  "lastUpdated": "2025-11-30T08:17:24.599Z"
+}
